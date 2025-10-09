@@ -1,0 +1,7 @@
+The purpose of a class info txt file is to give LLM's access to a bigger picture view of what the topics 
+in the class. This is important for preventing the LLM from making erroneous assumptions about what material
+the students are expected to know, and can help it focus on the actual goals of the course.
+
+This might include the relevant text of the syllabus, a discussion of the current unit, or comments on 
+expectations of the students abilities or general standards that they should be held to. Information 
+specific to a given assignment should be passed in as notes in the command line. 

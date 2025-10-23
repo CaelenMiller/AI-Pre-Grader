@@ -27,7 +27,6 @@ from typing import List, Optional, Tuple
 import io
 
 # --- OpenAI Agents SDK ---
-from dotenv import load_dotenv; load_dotenv(override=True)
 from agents import Agent, Runner  # type: ignore
 
 # --- PDF & image handling ---

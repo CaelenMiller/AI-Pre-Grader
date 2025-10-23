@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Pre-Grader Control Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="layout">
+      <header>
+        <h1>AI Pre-Grader Control Panel</h1>
+      </header>
+
+      <section class="controls">
+        <div class="control-sliders">
+          <div class="control-group">
+            <label for="concurrency">Concurrent Runs: <span id="concurrency-value">{{ max_concurrent }}</span></label>
+            <input
+              type="range"
+              id="concurrency"
+              name="concurrency"
+              min="1"
+              max="10"
+              value="{{ max_concurrent }}"
+            />
+          </div>
+          <div class="control-group">
+            <label for="nitpickiness">Nitpickiness: <span id="nitpickiness-value">{{ nitpickiness }}</span></label>
+            <input
+              type="range"
+              id="nitpickiness"
+              name="nitpickiness"
+              min="1"
+              max="5"
+              value="{{ nitpickiness }}"
+            />
+          </div>
+        </div>
+        <div class="status" id="status">Status: {{ status }}</div>
+      </section>
+
+      <section class="notes">
+        <label for="grading-notes">Grading Notes</label>
+        <textarea
+          id="grading-notes"
+          name="grading-notes"
+          rows="5"
+          placeholder="Add context for the grader, such as key concepts or specific mistakes to watch for.">{{ grading_notes }}</textarea>
+      </section>
+
+      <section class="panels">
+        <article class="panel" data-category="solutions">
+          <h2>Solution</h2>
+          <p class="panel-description">Drop a PDF or use the upload button.</p>
+          <div class="drop-area" data-category="solutions">
+            <p>Drop PDF here</p>
+            <input type="file" accept="application/pdf" />
+          </div>
+          <div class="panel-actions">
+            <button class="button" data-action="generate">Generate Solution</button>
+            <button class="button secondary" data-action="clear">Clear</button>
+          </div>
+          <ul class="file-list" data-category="solutions">
+            {% for name in files['solutions'] %}
+            <li>{{ name }}</li>
+            {% endfor %}
+          </ul>
+        </article>
+
+        <article class="panel" data-category="problems">
+          <h2>Problems</h2>
+          <p class="panel-description">Drop a PDF or use the upload button.</p>
+          <div class="drop-area" data-category="problems">
+            <p>Drop PDF here</p>
+            <input type="file" accept="application/pdf" />
+          </div>
+          <div class="panel-actions">
+            <button class="button secondary" data-action="clear">Clear</button>
+          </div>
+          <ul class="file-list" data-category="problems">
+            {% for name in files['problems'] %}
+            <li>{{ name }}</li>
+            {% endfor %}
+          </ul>
+        </article>
+
+        <article class="panel" data-category="submissions">
+          <h2>Student Submissions</h2>
+          <p class="panel-description">
+            Drop a single PDF or a folder of PDFs, or use the upload button.
+          </p>
+          <div class="drop-area" data-category="submissions">
+            <p>Drop PDF or folder here</p>
+            <input type="file" accept="application/pdf" webkitdirectory directory multiple />
+          </div>
+          <div class="panel-actions">
+            <button class="button" data-action="grade">Grade Submission</button>
+            <button class="button secondary" data-action="clear">Clear</button>
+          </div>
+          <ul class="file-list" data-category="submissions">
+            {% for name in files['submissions'] %}
+            <li>{{ name }}</li>
+            {% endfor %}
+          </ul>
+        </article>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </body>
+</html>

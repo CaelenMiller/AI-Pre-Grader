@@ -1,6 +1,10 @@
 const statusEl = document.getElementById("status");
 const concurrencySlider = document.getElementById("concurrency");
 const concurrencyValue = document.getElementById("concurrency-value");
+const nitpickinessSlider = document.getElementById("nitpickiness");
+const nitpickinessValue = document.getElementById("nitpickiness-value");
+const gradingNotesInput = document.getElementById("grading-notes");
+let notesDebounceHandle;
 
 async function updateStatus(message) {
   if (!statusEl) return;
@@ -144,6 +148,37 @@ function initializeConcurrency() {
   });
 }
 
+function initializeNitpickiness() {
+  nitpickinessSlider?.addEventListener("input", () => {
+    nitpickinessValue.textContent = nitpickinessSlider.value;
+  });
+
+  nitpickinessSlider?.addEventListener("change", async () => {
+    const value = Number(nitpickinessSlider.value);
+    try {
+      await postJSON("/settings/nitpickiness", { level: value });
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+}
+
+function initializeGradingNotes() {
+  if (!gradingNotesInput) return;
+
+  gradingNotesInput.addEventListener("input", () => {
+    clearTimeout(notesDebounceHandle);
+    const notes = gradingNotesInput.value;
+    notesDebounceHandle = window.setTimeout(async () => {
+      try {
+        await postJSON("/settings/notes", { notes });
+      } catch (error) {
+        alert(error.message);
+      }
+    }, 400);
+  });
+}
+
 async function hydrate() {
   try {
     const state = await fetch("/state").then((res) => res.json());
@@ -155,6 +190,13 @@ async function hydrate() {
       concurrencySlider.value = state.maxConcurrent;
       concurrencyValue.textContent = state.maxConcurrent;
     }
+    if (typeof state.nitpickiness === "number" && nitpickinessSlider) {
+      nitpickinessSlider.value = state.nitpickiness;
+      nitpickinessValue.textContent = state.nitpickiness;
+    }
+    if (typeof state.gradingNotes === "string" && gradingNotesInput) {
+      gradingNotesInput.value = state.gradingNotes;
+    }
   } catch (error) {
     console.error("Failed to load initial state", error);
   }
@@ -162,4 +204,6 @@ async function hydrate() {
 
 document.querySelectorAll(".panel").forEach((panel) => initializePanel(panel));
 initializeConcurrency();
+initializeNitpickiness();
+initializeGradingNotes();
 hydrate();

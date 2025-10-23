@@ -39,6 +39,12 @@ header h1 {
   gap: 1rem;
 }
 
+.control-sliders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
 .control-group {
   display: flex;
   flex-direction: column;
@@ -49,12 +55,44 @@ header h1 {
   width: 220px;
 }
 
+#nitpickiness {
+  width: 220px;
+}
+
 .status {
   background: var(--status-bg);
   padding: 0.75rem 1rem;
   border-radius: 0.75rem;
   font-weight: 600;
   min-width: 220px;
+}
+
+.notes {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.notes label {
+  font-weight: 600;
+}
+
+.notes textarea {
+  font-family: inherit;
+  font-size: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  padding: 0.75rem;
+  resize: vertical;
+  min-height: 140px;
+  color: var(--text);
+  background: var(--panel-bg);
 }
 
 .panels {
@@ -166,6 +204,10 @@ header h1 {
   }
 
   #concurrency {
+    width: 100%;
+  }
+
+  #nitpickiness {
     width: 100%;
   }
 }

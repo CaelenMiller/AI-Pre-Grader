@@ -13,18 +13,40 @@
       </header>
 
       <section class="controls">
-        <div class="control-group">
-          <label for="concurrency">Concurrent Runs: <span id="concurrency-value">{{ max_concurrent }}</span></label>
-          <input
-            type="range"
-            id="concurrency"
-            name="concurrency"
-            min="1"
-            max="10"
-            value="{{ max_concurrent }}"
-          />
+        <div class="control-sliders">
+          <div class="control-group">
+            <label for="concurrency">Concurrent Runs: <span id="concurrency-value">{{ max_concurrent }}</span></label>
+            <input
+              type="range"
+              id="concurrency"
+              name="concurrency"
+              min="1"
+              max="10"
+              value="{{ max_concurrent }}"
+            />
+          </div>
+          <div class="control-group">
+            <label for="nitpickiness">Nitpickiness: <span id="nitpickiness-value">{{ nitpickiness }}</span></label>
+            <input
+              type="range"
+              id="nitpickiness"
+              name="nitpickiness"
+              min="1"
+              max="5"
+              value="{{ nitpickiness }}"
+            />
+          </div>
         </div>
         <div class="status" id="status">Status: {{ status }}</div>
+      </section>
+
+      <section class="notes">
+        <label for="grading-notes">Grading Notes</label>
+        <textarea
+          id="grading-notes"
+          name="grading-notes"
+          rows="5"
+          placeholder="Add context for the grader, such as key concepts or specific mistakes to watch for.">{{ grading_notes }}</textarea>
       </section>
 
       <section class="panels">

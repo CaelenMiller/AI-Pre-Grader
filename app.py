@@ -18,6 +18,8 @@ uploaded_files: Dict[str, List[str]] = {
 }
 status_message: str = "Idle"
 max_concurrent: int = 1
+nitpickiness_level: int = 3
+grading_notes: str = ""
 
 
 @app.route("/")
@@ -27,6 +29,8 @@ def index():
         status=status_message,
         files=uploaded_files,
         max_concurrent=max_concurrent,
+        nitpickiness=nitpickiness_level,
+        grading_notes=grading_notes,
     )
 
 
@@ -45,6 +49,8 @@ def get_state():
             "status": status_message,
             "files": uploaded_files,
             "maxConcurrent": max_concurrent,
+            "nitpickiness": nitpickiness_level,
+            "gradingNotes": grading_notes,
         }
     )
 
@@ -107,6 +113,28 @@ def update_concurrency():
         return jsonify({"message": "maxConcurrent must be an integer between 1 and 10."}), 400
     max_concurrent = value
     return jsonify({"message": "Updated.", "maxConcurrent": max_concurrent})
+
+
+@app.route("/settings/nitpickiness", methods=["POST"])
+def update_nitpickiness():
+    global nitpickiness_level
+    payload = request.get_json(silent=True) or {}
+    value = payload.get("level")
+    if not isinstance(value, int) or not (1 <= value <= 5):
+        return jsonify({"message": "level must be an integer between 1 and 5."}), 400
+    nitpickiness_level = value
+    return jsonify({"message": "Updated.", "nitpickiness": nitpickiness_level})
+
+
+@app.route("/settings/notes", methods=["POST"])
+def update_notes():
+    global grading_notes
+    payload = request.get_json(silent=True) or {}
+    notes = payload.get("notes", "")
+    if not isinstance(notes, str):
+        return jsonify({"message": "notes must be a string."}), 400
+    grading_notes = notes
+    return jsonify({"message": "Updated.", "gradingNotes": grading_notes})
 
 
 if __name__ == "__main__":

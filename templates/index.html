@@ -90,6 +90,16 @@
           <p class="panel-description">
             Drop a single PDF or a folder of PDFs, or use the upload button.
           </p>
+          <div class="form-group">
+            <label for="assignment-title">Assignment Title</label>
+            <input
+              type="text"
+              id="assignment-title"
+              name="assignmentTitle"
+              placeholder="Enter assignment title"
+              value="{{ assignment_title }}"
+            />
+          </div>
           <div class="drop-area" data-category="submissions">
             <p>Drop PDF or folder here</p>
             <input type="file" accept="application/pdf" webkitdirectory directory multiple />

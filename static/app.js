@@ -4,7 +4,9 @@ const concurrencyValue = document.getElementById("concurrency-value");
 const nitpickinessSlider = document.getElementById("nitpickiness");
 const nitpickinessValue = document.getElementById("nitpickiness-value");
 const gradingNotesInput = document.getElementById("grading-notes");
+const assignmentTitleInput = document.getElementById("assignment-title");
 let notesDebounceHandle;
+let currentAssignmentTitle = assignmentTitleInput?.value || "";
 
 async function updateStatus(message) {
   if (!statusEl) return;
@@ -57,6 +59,9 @@ function initializeDropArea(panel) {
       return;
     }
     const formData = new FormData();
+    if (assignmentTitleInput && category === "submissions") {
+      formData.append("assignmentTitle", currentAssignmentTitle);
+    }
     Array.from(fileList).forEach((file) => formData.append("files", file));
 
     try {
@@ -179,6 +184,14 @@ function initializeGradingNotes() {
   });
 }
 
+function initializeAssignmentTitle() {
+  if (!assignmentTitleInput) return;
+
+  assignmentTitleInput.addEventListener("input", () => {
+    currentAssignmentTitle = assignmentTitleInput.value;
+  });
+}
+
 async function hydrate() {
   try {
     const state = await fetch("/state").then((res) => res.json());
@@ -197,6 +210,10 @@ async function hydrate() {
     if (typeof state.gradingNotes === "string" && gradingNotesInput) {
       gradingNotesInput.value = state.gradingNotes;
     }
+    if (typeof state.assignmentTitle === "string" && assignmentTitleInput) {
+      assignmentTitleInput.value = state.assignmentTitle;
+      currentAssignmentTitle = state.assignmentTitle;
+    }
   } catch (error) {
     console.error("Failed to load initial state", error);
   }
@@ -206,4 +223,5 @@ document.querySelectorAll(".panel").forEach((panel) => initializePanel(panel));
 initializeConcurrency();
 initializeNitpickiness();
 initializeGradingNotes();
+initializeAssignmentTitle();
 hydrate();

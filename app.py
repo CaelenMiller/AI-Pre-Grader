@@ -20,6 +20,7 @@ status_message: str = "Idle"
 max_concurrent: int = 1
 nitpickiness_level: int = 3
 grading_notes: str = ""
+assignment_title: str = ""
 
 
 @app.route("/")
@@ -31,6 +32,7 @@ def index():
         max_concurrent=max_concurrent,
         nitpickiness=nitpickiness_level,
         grading_notes=grading_notes,
+        assignment_title=assignment_title,
     )
 
 
@@ -51,18 +53,24 @@ def get_state():
             "maxConcurrent": max_concurrent,
             "nitpickiness": nitpickiness_level,
             "gradingNotes": grading_notes,
+            "assignmentTitle": assignment_title,
         }
     )
 
 
 @app.route("/upload/<category>", methods=["POST"])
 def upload(category: str):
+    global assignment_title
     target_dir = _ensure_category(category)
     uploaded_files[category].clear()
 
     files = request.files.getlist("files")
     if not files:
         return jsonify({"message": "No files uploaded."}), 400
+
+    title = request.form.get("assignmentTitle")
+    if isinstance(title, str):
+        assignment_title = title
 
     stored = []
     for file_storage in files:

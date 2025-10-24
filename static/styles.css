@@ -193,6 +193,29 @@ header h1 {
   word-break: break-all;
 }
 
+.file-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.file-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-group h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.file-list .empty {
+  font-style: italic;
+}
+
 @media (max-width: 600px) {
   main.layout {
     padding: 1rem;

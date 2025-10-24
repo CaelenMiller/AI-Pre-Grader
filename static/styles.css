@@ -67,6 +67,48 @@ header h1 {
   min-width: 220px;
 }
 
+.assignment-controls {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.assignment-controls__title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.assignment-controls__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.assignment-controls .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1 1 240px;
+  min-width: 220px;
+}
+
+.assignment-controls select,
+.assignment-controls input[type="text"] {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  padding: 0.65rem 0.75rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--panel-bg);
+}
+
 .notes {
   background: var(--panel-bg);
   border: 1px solid var(--border);

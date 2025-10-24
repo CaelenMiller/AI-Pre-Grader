@@ -72,7 +72,7 @@ function initializeDropArea(panel) {
       return;
     }
     const formData = new FormData();
-    if (assignmentTitleInput && category === "submissions") {
+    if (assignmentTitleInput) {
       formData.append("assignmentTitle", currentAssignmentTitle);
     }
     Array.from(fileList).forEach((file) => formData.append("files", file));

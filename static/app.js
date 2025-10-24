@@ -36,10 +36,23 @@ async function postFormData(url, formData) {
   return response.json();
 }
 
-function refreshFileList(category, files = []) {
-  const list = document.querySelector(`.file-list[data-category="${category}"]`);
+function refreshFileList(category, files = [], options = {}) {
+  const {
+    selector = `.file-list[data-category="${category}"]`,
+    emptyMessage = "",
+  } = options;
+  const list = document.querySelector(selector);
   if (!list) return;
   list.innerHTML = "";
+  if (!files.length) {
+    if (emptyMessage) {
+      const li = document.createElement("li");
+      li.textContent = emptyMessage;
+      li.classList.add("empty");
+      list.appendChild(li);
+    }
+    return;
+  }
   files.forEach((file) => {
     const li = document.createElement("li");
     li.textContent = file;
@@ -185,6 +198,18 @@ async function hydrate() {
     updateStatus(state.status || "Idle");
     Object.entries(state.files || {}).forEach(([category, items]) => {
       refreshFileList(category, items);
+    });
+    const appdataEntries = state.appdataFiles || {};
+    Object.entries(appdataEntries).forEach(([category, info = {}]) => {
+      const files = Array.isArray(info.files) ? info.files : [];
+      const exists = typeof info.exists === "boolean" ? info.exists : false;
+      const emptyMessage = exists
+        ? "No stored files found."
+        : "Folder not found.";
+      refreshFileList(category, files, {
+        selector: `.file-list[data-appdata-category="${category}"]`,
+        emptyMessage,
+      });
     });
     if (typeof state.maxConcurrent === "number") {
       concurrencySlider.value = state.maxConcurrent;

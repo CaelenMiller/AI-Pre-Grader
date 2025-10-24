@@ -80,6 +80,11 @@ function initializeDropArea(panel) {
     try {
       const result = await postFormData(`/upload/${category}`, formData);
       refreshFileList(category, result.files);
+      if (typeof result.assignmentTitle === "string" && assignmentTitleInput) {
+        assignmentTitleInput.value = result.assignmentTitle;
+        currentAssignmentTitle = result.assignmentTitle;
+      }
+      await hydrate();
       await updateStatus("Idle");
     } catch (error) {
       alert(error.message);

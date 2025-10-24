@@ -144,11 +144,38 @@ def upload(category: str):
 
 @app.route("/clear/<category>", methods=["POST"])
 def clear(category: str):
-    target_dir = _ensure_category(category)
-    for item in target_dir.iterdir():
-        if item.is_file():
-            item.unlink()
-    uploaded_files[category].clear()
+    if category not in uploaded_files:
+        return jsonify({"message": f"Unsupported category: {category}."}), 404
+
+    if not assignment_title:
+        return jsonify({"message": "No assignment selected."}), 400
+
+    assignment_root = APPDATA_DIR / assignment_title
+    folder_name = CATEGORY_TITLES.get(category, category)
+    target_dir = assignment_root / folder_name
+
+    if target_dir.is_dir():
+        for item in target_dir.iterdir():
+            if item.is_file():
+                item.unlink()
+
+        uploaded_files[category].clear()
+
+        def _prune_empty(path: Path, stop: Path) -> None:
+            current = path
+            while current != stop and current.exists():
+                try:
+                    next(current.iterdir())
+                except StopIteration:
+                    current.rmdir()
+                    current = current.parent
+                else:
+                    break
+
+        _prune_empty(target_dir, APPDATA_DIR)
+    else:
+        uploaded_files[category].clear()
+
     return jsonify({"message": "Cleared."})
 
 

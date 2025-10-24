@@ -119,22 +119,56 @@ def _list_assignments() -> List[str]:
     return assignments
 
 
+def _build_state_payload() -> Dict[str, object]:
+    appdata_files = _gather_appdata_files()
+    return {
+        "status": status_message,
+        "files": uploaded_files,
+        "appdataFiles": appdata_files,
+        "authoritativeFiles": _build_authoritative_file_state(appdata_files),
+        "assignments": _list_assignments(),
+        "maxConcurrent": max_concurrent,
+        "nitpickiness": nitpickiness_level,
+        "gradingNotes": grading_notes,
+        "assignmentTitle": assignment_title,
+    }
+
+
 @app.route("/state")
 def get_state():
-    appdata_files = _gather_appdata_files()
-    return jsonify(
-        {
-            "status": status_message,
-            "files": uploaded_files,
-            "appdataFiles": appdata_files,
-            "authoritativeFiles": _build_authoritative_file_state(appdata_files),
-            "assignments": _list_assignments(),
-            "maxConcurrent": max_concurrent,
-            "nitpickiness": nitpickiness_level,
-            "gradingNotes": grading_notes,
-            "assignmentTitle": assignment_title,
-        }
-    )
+    return jsonify(_build_state_payload())
+
+
+@app.route("/assignment/select", methods=["POST"])
+def select_assignment():
+    global assignment_title
+
+    payload = request.get_json(silent=True) or {}
+    raw_title = payload.get("assignmentTitle") or payload.get("title") or ""
+    requested_title = (raw_title or "").strip()
+    if not requested_title:
+        return jsonify({"message": "assignmentTitle is required."}), 400
+
+    safe_title = secure_filename(requested_title)
+    if not safe_title:
+        return (
+            jsonify(
+                {
+                    "message": "Title must include letters or numbers after removing unsafe characters.",
+                }
+            ),
+            400,
+        )
+
+    assignment_path = APPDATA_DIR / safe_title
+    if not assignment_path.exists() or not assignment_path.is_dir():
+        return jsonify({"message": "Assignment not found."}), 404
+
+    assignment_title = safe_title
+    for category in uploaded_files:
+        uploaded_files[category].clear()
+
+    return jsonify(_build_state_payload())
 
 
 @app.route("/upload/<category>", methods=["POST"])

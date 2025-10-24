@@ -11,6 +11,7 @@ const NEW_ASSIGNMENT_VALUE = "__new__";
 let notesDebounceHandle;
 let pendingNewAssignmentTitle = assignmentTitleInput?.value || "";
 let currentAssignmentTitle = "";
+let lastAssignmentSelectValue = assignmentSelect?.value || "";
 
 function toggleNewAssignmentInput(show) {
   if (!newAssignmentGroup) return;
@@ -20,7 +21,8 @@ function toggleNewAssignmentInput(show) {
 if (assignmentSelect) {
   if (assignmentSelect.value === NEW_ASSIGNMENT_VALUE) {
     toggleNewAssignmentInput(true);
-    currentAssignmentTitle = (assignmentTitleInput?.value || "").trim();
+    pendingNewAssignmentTitle = (assignmentTitleInput?.value || "").trim();
+    currentAssignmentTitle = "";
   } else if (assignmentSelect.value) {
     toggleNewAssignmentInput(false);
     currentAssignmentTitle = assignmentSelect.value;
@@ -30,7 +32,15 @@ if (assignmentSelect) {
   }
 } else {
   toggleNewAssignmentInput(Boolean(assignmentTitleInput?.value));
+  pendingNewAssignmentTitle = (assignmentTitleInput?.value || "").trim();
   currentAssignmentTitle = (assignmentTitleInput?.value || "").trim();
+}
+
+function resolveCurrentTitle() {
+  if (assignmentSelect?.value === NEW_ASSIGNMENT_VALUE) {
+    return (pendingNewAssignmentTitle || "").trim();
+  }
+  return currentAssignmentTitle;
 }
 
 async function updateStatus(message) {
@@ -96,14 +106,13 @@ function initializeDropArea(panel) {
     if (!fileList || !fileList.length) {
       return;
     }
-    if (!currentAssignmentTitle) {
+    const effectiveTitle = resolveCurrentTitle();
+    if (!effectiveTitle) {
       alert("Select or create an assignment before uploading files.");
       return;
     }
     const formData = new FormData();
-    if (assignmentTitleInput) {
-      formData.append("assignmentTitle", currentAssignmentTitle);
-    }
+    formData.append("assignmentTitle", effectiveTitle);
     Array.from(fileList).forEach((file) => formData.append("files", file));
 
     try {
@@ -293,7 +302,7 @@ function updateAssignmentOptions(assignments = [], selectedTitle = "") {
     if (assignmentTitleInput) {
       assignmentTitleInput.value = pendingNewAssignmentTitle;
     }
-    currentAssignmentTitle = (assignmentTitleInput?.value || "").trim();
+    currentAssignmentTitle = "";
   } else if (assignmentSelect.value) {
     toggleNewAssignmentInput(false);
     currentAssignmentTitle = assignmentSelect.value;
@@ -309,24 +318,78 @@ function updateAssignmentOptions(assignments = [], selectedTitle = "") {
   if (assignmentTitleInput && assignmentSelect.value === NEW_ASSIGNMENT_VALUE) {
     pendingNewAssignmentTitle = assignmentTitleInput.value;
   }
+
+  lastAssignmentSelectValue = assignmentSelect.value;
+}
+
+function applyState(state = {}) {
+  updateStatus(state.status || "Idle");
+  const authoritativeEntries = state.authoritativeFiles || {};
+  Object.entries(authoritativeEntries).forEach(([category, info = {}]) => {
+    const files = Array.isArray(info.files) ? info.files : [];
+    const exists = typeof info.exists === "boolean" ? info.exists : false;
+    const emptyMessage = exists ? "No files available." : "Folder not found.";
+    refreshFileList(category, files, { emptyMessage });
+  });
+  if (typeof state.maxConcurrent === "number") {
+    concurrencySlider.value = state.maxConcurrent;
+    concurrencyValue.textContent = state.maxConcurrent;
+  }
+  if (typeof state.nitpickiness === "number" && nitpickinessSlider) {
+    nitpickinessSlider.value = state.nitpickiness;
+    nitpickinessValue.textContent = state.nitpickiness;
+  }
+  if (typeof state.gradingNotes === "string" && gradingNotesInput) {
+    gradingNotesInput.value = state.gradingNotes;
+  }
+  updateAssignmentOptions(state.assignments || [], state.assignmentTitle || "");
 }
 
 function initializeAssignmentControls() {
   if (assignmentSelect) {
-    assignmentSelect.addEventListener("change", () => {
-      if (assignmentSelect.value === NEW_ASSIGNMENT_VALUE) {
+    assignmentSelect.addEventListener("change", async () => {
+      const previousSelectValue = lastAssignmentSelectValue;
+      const previousConfirmedTitle = currentAssignmentTitle;
+      const selectedValue = assignmentSelect.value;
+      lastAssignmentSelectValue = selectedValue;
+      if (selectedValue === NEW_ASSIGNMENT_VALUE) {
         toggleNewAssignmentInput(true);
         if (assignmentTitleInput) {
           assignmentTitleInput.value = pendingNewAssignmentTitle;
           assignmentTitleInput.focus();
         }
-        currentAssignmentTitle = (assignmentTitleInput?.value || "").trim();
-      } else if (assignmentSelect.value) {
-        toggleNewAssignmentInput(false);
-        currentAssignmentTitle = assignmentSelect.value;
-      } else {
-        toggleNewAssignmentInput(false);
         currentAssignmentTitle = "";
+        return;
+      }
+
+      toggleNewAssignmentInput(false);
+
+      if (!selectedValue) {
+        currentAssignmentTitle = "";
+        lastAssignmentSelectValue = "";
+        return;
+      }
+
+      try {
+        const state = await postJSON("/assignment/select", {
+          assignmentTitle: selectedValue,
+        });
+        applyState(state);
+        pendingNewAssignmentTitle = "";
+      } catch (error) {
+        alert(error.message);
+        assignmentSelect.value = previousSelectValue;
+        lastAssignmentSelectValue = previousSelectValue;
+        currentAssignmentTitle = previousConfirmedTitle;
+        if (previousSelectValue === NEW_ASSIGNMENT_VALUE) {
+          toggleNewAssignmentInput(true);
+          if (assignmentTitleInput) {
+            assignmentTitleInput.value = pendingNewAssignmentTitle;
+            assignmentTitleInput.focus();
+          }
+        } else {
+          toggleNewAssignmentInput(false);
+        }
       }
     });
   }
@@ -334,9 +397,6 @@ function initializeAssignmentControls() {
   if (assignmentTitleInput) {
     assignmentTitleInput.addEventListener("input", () => {
       pendingNewAssignmentTitle = assignmentTitleInput.value;
-      if (assignmentSelect?.value === NEW_ASSIGNMENT_VALUE) {
-        currentAssignmentTitle = assignmentTitleInput.value.trim();
-      }
     });
   }
 }
@@ -344,28 +404,7 @@ function initializeAssignmentControls() {
 async function hydrate() {
   try {
     const state = await fetch("/state").then((res) => res.json());
-    updateStatus(state.status || "Idle");
-    const authoritativeEntries = state.authoritativeFiles || {};
-    Object.entries(authoritativeEntries).forEach(([category, info = {}]) => {
-      const files = Array.isArray(info.files) ? info.files : [];
-      const exists = typeof info.exists === "boolean" ? info.exists : false;
-      const emptyMessage = exists
-        ? "No files available."
-        : "Folder not found.";
-      refreshFileList(category, files, { emptyMessage });
-    });
-    if (typeof state.maxConcurrent === "number") {
-      concurrencySlider.value = state.maxConcurrent;
-      concurrencyValue.textContent = state.maxConcurrent;
-    }
-    if (typeof state.nitpickiness === "number" && nitpickinessSlider) {
-      nitpickinessSlider.value = state.nitpickiness;
-      nitpickinessValue.textContent = state.nitpickiness;
-    }
-    if (typeof state.gradingNotes === "string" && gradingNotesInput) {
-      gradingNotesInput.value = state.gradingNotes;
-    }
-    updateAssignmentOptions(state.assignments || [], state.assignmentTitle || "");
+    applyState(state);
   } catch (error) {
     console.error("Failed to load initial state", error);
   }

@@ -65,8 +65,8 @@ async function postFormData(url, formData) {
 
 function refreshFileList(category, files = [], options = {}) {
   const {
-    selector = `.file-list[data-category="${category}"]`,
-    emptyMessage = "",
+    selector = `.file-list[data-files-category="${category}"]`,
+    emptyMessage = "No files available.",
   } = options;
   const list = document.querySelector(selector);
   if (!list) return;
@@ -108,7 +108,6 @@ function initializeDropArea(panel) {
 
     try {
       const result = await postFormData(`/upload/${category}`, formData);
-      refreshFileList(category, result.files);
       if (typeof result.assignmentTitle === "string") {
         currentAssignmentTitle = result.assignmentTitle;
       }
@@ -160,7 +159,7 @@ function initializePanel(panel) {
         try {
           await updateStatus("Wiping folder...");
           await postJSON(`/clear/${category}`, {});
-          refreshFileList(category, []);
+          await hydrate();
           await updateStatus("Folder wiped");
         } catch (error) {
           alert(error.message);
@@ -346,20 +345,14 @@ async function hydrate() {
   try {
     const state = await fetch("/state").then((res) => res.json());
     updateStatus(state.status || "Idle");
-    Object.entries(state.files || {}).forEach(([category, items]) => {
-      refreshFileList(category, items);
-    });
-    const appdataEntries = state.appdataFiles || {};
-    Object.entries(appdataEntries).forEach(([category, info = {}]) => {
+    const authoritativeEntries = state.authoritativeFiles || {};
+    Object.entries(authoritativeEntries).forEach(([category, info = {}]) => {
       const files = Array.isArray(info.files) ? info.files : [];
       const exists = typeof info.exists === "boolean" ? info.exists : false;
       const emptyMessage = exists
-        ? "No stored files found."
+        ? "No files available."
         : "Folder not found.";
-      refreshFileList(category, files, {
-        selector: `.file-list[data-appdata-category="${category}"]`,
-        emptyMessage,
-      });
+      refreshFileList(category, files, { emptyMessage });
     });
     if (typeof state.maxConcurrent === "number") {
       concurrencySlider.value = state.maxConcurrent;

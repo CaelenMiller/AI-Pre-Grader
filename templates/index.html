@@ -61,34 +61,24 @@
             <button class="button" data-action="generate">Generate Solution</button>
             <button class="button secondary" data-action="wipe">Wipe Folder</button>
           </div>
-          <div class="file-groups">
-            <div class="file-group">
-              <h3>Uploaded Files</h3>
-              <ul class="file-list" data-category="solutions">
-                {% for name in files['solutions'] %}
-                <li>{{ name }}</li>
-                {% endfor %}
-              </ul>
-            </div>
-            <div class="file-group">
-              <h3>Stored Files</h3>
-              {% set stored = appdata_files['solutions'] %}
-              <ul class="file-list" data-appdata-category="solutions">
-                {% if stored.files %}
-                {% for name in stored.files %}
-                <li>{{ name }}</li>
-                {% endfor %}
+          {% set file_info = authoritative_files.get('solutions', {'files': [], 'exists': False}) %}
+          <div class="file-group">
+            <h3>Files</h3>
+            <ul class="file-list" data-files-category="solutions">
+              {% if file_info.files %}
+              {% for name in file_info.files %}
+              <li>{{ name }}</li>
+              {% endfor %}
+              {% else %}
+              <li class="empty">
+                {% if file_info.exists %}
+                No files available.
                 {% else %}
-                <li class="empty">
-                  {% if stored.exists %}
-                  No stored files found.
-                  {% else %}
-                  Folder not found.
-                  {% endif %}
-                </li>
+                Folder not found.
                 {% endif %}
-              </ul>
-            </div>
+              </li>
+              {% endif %}
+            </ul>
           </div>
         </article>
 
@@ -102,34 +92,24 @@
           <div class="panel-actions">
             <button class="button secondary" data-action="wipe">Wipe Folder</button>
           </div>
-          <div class="file-groups">
-            <div class="file-group">
-              <h3>Uploaded Files</h3>
-              <ul class="file-list" data-category="problems">
-                {% for name in files['problems'] %}
-                <li>{{ name }}</li>
-                {% endfor %}
-              </ul>
-            </div>
-            <div class="file-group">
-              <h3>Stored Files</h3>
-              {% set stored = appdata_files['problems'] %}
-              <ul class="file-list" data-appdata-category="problems">
-                {% if stored.files %}
-                {% for name in stored.files %}
-                <li>{{ name }}</li>
-                {% endfor %}
+          {% set file_info = authoritative_files.get('problems', {'files': [], 'exists': False}) %}
+          <div class="file-group">
+            <h3>Files</h3>
+            <ul class="file-list" data-files-category="problems">
+              {% if file_info.files %}
+              {% for name in file_info.files %}
+              <li>{{ name }}</li>
+              {% endfor %}
+              {% else %}
+              <li class="empty">
+                {% if file_info.exists %}
+                No files available.
                 {% else %}
-                <li class="empty">
-                  {% if stored.exists %}
-                  No stored files found.
-                  {% else %}
-                  Folder not found.
-                  {% endif %}
-                </li>
+                Folder not found.
                 {% endif %}
-              </ul>
-            </div>
+              </li>
+              {% endif %}
+            </ul>
           </div>
         </article>
 
@@ -171,34 +151,24 @@
             <button class="button" data-action="grade">Grade Submission</button>
             <button class="button secondary" data-action="wipe">Wipe Folder</button>
           </div>
-          <div class="file-groups">
-            <div class="file-group">
-              <h3>Uploaded Files</h3>
-              <ul class="file-list" data-category="submissions">
-                {% for name in files['submissions'] %}
-                <li>{{ name }}</li>
-                {% endfor %}
-              </ul>
-            </div>
-            <div class="file-group">
-              <h3>Stored Files</h3>
-              {% set stored = appdata_files['submissions'] %}
-              <ul class="file-list" data-appdata-category="submissions">
-                {% if stored.files %}
-                {% for name in stored.files %}
-                <li>{{ name }}</li>
-                {% endfor %}
+          {% set file_info = authoritative_files.get('submissions', {'files': [], 'exists': False}) %}
+          <div class="file-group">
+            <h3>Files</h3>
+            <ul class="file-list" data-files-category="submissions">
+              {% if file_info.files %}
+              {% for name in file_info.files %}
+              <li>{{ name }}</li>
+              {% endfor %}
+              {% else %}
+              <li class="empty">
+                {% if file_info.exists %}
+                No files available.
                 {% else %}
-                <li class="empty">
-                  {% if stored.exists %}
-                  No stored files found.
-                  {% else %}
-                  Folder not found.
-                  {% endif %}
-                </li>
+                Folder not found.
                 {% endif %}
-              </ul>
-            </div>
+              </li>
+              {% endif %}
+            </ul>
           </div>
         </article>
       </section>

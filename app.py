@@ -34,11 +34,12 @@ assignment_title: str = ""
 @app.route("/")
 def index():
     appdata_files = _gather_appdata_files()
+    authoritative_files = _build_authoritative_file_state(appdata_files)
     return render_template(
         "index.html",
         status=status_message,
         files=uploaded_files,
-        appdata_files=appdata_files,
+        authoritative_files=authoritative_files,
         assignments=_list_assignments(),
         max_concurrent=max_concurrent,
         nitpickiness=nitpickiness_level,
@@ -86,6 +87,26 @@ def _gather_appdata_files() -> Dict[str, Dict[str, object]]:
     return data
 
 
+def _build_authoritative_file_state(
+    appdata: Optional[Dict[str, Dict[str, object]]] = None,
+) -> Dict[str, Dict[str, object]]:
+    source = appdata if appdata is not None else _gather_appdata_files()
+    authoritative: Dict[str, Dict[str, object]] = {}
+
+    for category in CATEGORY_TITLES:
+        info = source.get(category, {})
+        files = info.get("files") if isinstance(info, dict) else []
+        if not isinstance(files, list):
+            files = []
+        exists = info.get("exists") if isinstance(info, dict) else False
+        authoritative[category] = {
+            "files": files,
+            "exists": bool(exists),
+        }
+
+    return authoritative
+
+
 def _list_assignments() -> List[str]:
     if not APPDATA_DIR.exists():
         return []
@@ -100,11 +121,13 @@ def _list_assignments() -> List[str]:
 
 @app.route("/state")
 def get_state():
+    appdata_files = _gather_appdata_files()
     return jsonify(
         {
             "status": status_message,
             "files": uploaded_files,
-            "appdataFiles": _gather_appdata_files(),
+            "appdataFiles": appdata_files,
+            "authoritativeFiles": _build_authoritative_file_state(appdata_files),
             "assignments": _list_assignments(),
             "maxConcurrent": max_concurrent,
             "nitpickiness": nitpickiness_level,

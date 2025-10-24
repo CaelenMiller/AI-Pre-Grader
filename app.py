@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -21,17 +20,21 @@ status_message: str = "Idle"
 max_concurrent: int = 1
 nitpickiness_level: int = 3
 grading_notes: str = ""
+assignment_title: str = ""
 
 
 @app.route("/")
 def index():
+    appdata_files = _gather_appdata_files()
     return render_template(
         "index.html",
         status=status_message,
         files=uploaded_files,
+        appdata_files=appdata_files,
         max_concurrent=max_concurrent,
         nitpickiness=nitpickiness_level,
         grading_notes=grading_notes,
+        assignment_title=assignment_title,
     )
 
 
@@ -45,15 +48,34 @@ def _ensure_category(category: str, base_dir: Optional[Path] = None) -> Path:
     return path
 
 
+def _gather_appdata_files() -> Dict[str, Dict[str, object]]:
+    data: Dict[str, Dict[str, object]] = {}
+    for category, title in CATEGORY_TITLES.items():
+        folder = APPDATA_DIR / title
+        exists = folder.is_dir()
+        if exists:
+            files = [
+                item.name
+                for item in sorted(folder.iterdir(), key=lambda p: p.name.lower())
+                if item.is_file()
+            ]
+        else:
+            files = []
+        data[category] = {"files": files, "exists": exists}
+    return data
+
+
 @app.route("/state")
 def get_state():
     return jsonify(
         {
             "status": status_message,
             "files": uploaded_files,
+            "appdataFiles": _gather_appdata_files(),
             "maxConcurrent": max_concurrent,
             "nitpickiness": nitpickiness_level,
             "gradingNotes": grading_notes,
+            "assignmentTitle": assignment_title,
         }
     )
 

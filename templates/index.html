@@ -61,11 +61,35 @@
             <button class="button" data-action="generate">Generate Solution</button>
             <button class="button secondary" data-action="clear">Clear</button>
           </div>
-          <ul class="file-list" data-category="solutions">
-            {% for name in files['solutions'] %}
-            <li>{{ name }}</li>
-            {% endfor %}
-          </ul>
+          <div class="file-groups">
+            <div class="file-group">
+              <h3>Uploaded Files</h3>
+              <ul class="file-list" data-category="solutions">
+                {% for name in files['solutions'] %}
+                <li>{{ name }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="file-group">
+              <h3>Stored Files</h3>
+              {% set stored = appdata_files['solutions'] %}
+              <ul class="file-list" data-appdata-category="solutions">
+                {% if stored.files %}
+                {% for name in stored.files %}
+                <li>{{ name }}</li>
+                {% endfor %}
+                {% else %}
+                <li class="empty">
+                  {% if stored.exists %}
+                  No stored files found.
+                  {% else %}
+                  Folder not found.
+                  {% endif %}
+                </li>
+                {% endif %}
+              </ul>
+            </div>
+          </div>
         </article>
 
         <article class="panel" data-category="problems">
@@ -78,11 +102,35 @@
           <div class="panel-actions">
             <button class="button secondary" data-action="clear">Clear</button>
           </div>
-          <ul class="file-list" data-category="problems">
-            {% for name in files['problems'] %}
-            <li>{{ name }}</li>
-            {% endfor %}
-          </ul>
+          <div class="file-groups">
+            <div class="file-group">
+              <h3>Uploaded Files</h3>
+              <ul class="file-list" data-category="problems">
+                {% for name in files['problems'] %}
+                <li>{{ name }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="file-group">
+              <h3>Stored Files</h3>
+              {% set stored = appdata_files['problems'] %}
+              <ul class="file-list" data-appdata-category="problems">
+                {% if stored.files %}
+                {% for name in stored.files %}
+                <li>{{ name }}</li>
+                {% endfor %}
+                {% else %}
+                <li class="empty">
+                  {% if stored.exists %}
+                  No stored files found.
+                  {% else %}
+                  Folder not found.
+                  {% endif %}
+                </li>
+                {% endif %}
+              </ul>
+            </div>
+          </div>
         </article>
 
         <article class="panel" data-category="submissions">
@@ -90,6 +138,16 @@
           <p class="panel-description">
             Drop a single PDF or a folder of PDFs, or use the upload button.
           </p>
+          <div class="form-group">
+            <label for="assignment-title">Assignment Title</label>
+            <input
+              type="text"
+              id="assignment-title"
+              name="assignmentTitle"
+              placeholder="Enter assignment title"
+              value="{{ assignment_title }}"
+            />
+          </div>
           <div class="drop-area" data-category="submissions">
             <p>Drop PDF or folder here</p>
             <input type="file" accept="application/pdf" webkitdirectory directory multiple />
@@ -98,11 +156,35 @@
             <button class="button" data-action="grade">Grade Submission</button>
             <button class="button secondary" data-action="clear">Clear</button>
           </div>
-          <ul class="file-list" data-category="submissions">
-            {% for name in files['submissions'] %}
-            <li>{{ name }}</li>
-            {% endfor %}
-          </ul>
+          <div class="file-groups">
+            <div class="file-group">
+              <h3>Uploaded Files</h3>
+              <ul class="file-list" data-category="submissions">
+                {% for name in files['submissions'] %}
+                <li>{{ name }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="file-group">
+              <h3>Stored Files</h3>
+              {% set stored = appdata_files['submissions'] %}
+              <ul class="file-list" data-appdata-category="submissions">
+                {% if stored.files %}
+                {% for name in stored.files %}
+                <li>{{ name }}</li>
+                {% endfor %}
+                {% else %}
+                <li class="empty">
+                  {% if stored.exists %}
+                  No stored files found.
+                  {% else %}
+                  Folder not found.
+                  {% endif %}
+                </li>
+                {% endif %}
+              </ul>
+            </div>
+          </div>
         </article>
       </section>
     </main>

@@ -4,7 +4,9 @@ const concurrencyValue = document.getElementById("concurrency-value");
 const nitpickinessSlider = document.getElementById("nitpickiness");
 const nitpickinessValue = document.getElementById("nitpickiness-value");
 const gradingNotesInput = document.getElementById("grading-notes");
+const assignmentTitleInput = document.getElementById("assignment-title");
 let notesDebounceHandle;
+let currentAssignmentTitle = assignmentTitleInput?.value || "";
 
 async function updateStatus(message) {
   if (!statusEl) return;
@@ -36,10 +38,23 @@ async function postFormData(url, formData) {
   return response.json();
 }
 
-function refreshFileList(category, files = []) {
-  const list = document.querySelector(`.file-list[data-category="${category}"]`);
+function refreshFileList(category, files = [], options = {}) {
+  const {
+    selector = `.file-list[data-category="${category}"]`,
+    emptyMessage = "",
+  } = options;
+  const list = document.querySelector(selector);
   if (!list) return;
   list.innerHTML = "";
+  if (!files.length) {
+    if (emptyMessage) {
+      const li = document.createElement("li");
+      li.textContent = emptyMessage;
+      li.classList.add("empty");
+      list.appendChild(li);
+    }
+    return;
+  }
   files.forEach((file) => {
     const li = document.createElement("li");
     li.textContent = file;
@@ -57,6 +72,9 @@ function initializeDropArea(panel) {
       return;
     }
     const formData = new FormData();
+    if (assignmentTitleInput && category === "submissions") {
+      formData.append("assignmentTitle", currentAssignmentTitle);
+    }
     Array.from(fileList).forEach((file) => formData.append("files", file));
 
     try {
@@ -179,12 +197,32 @@ function initializeGradingNotes() {
   });
 }
 
+function initializeAssignmentTitle() {
+  if (!assignmentTitleInput) return;
+
+  assignmentTitleInput.addEventListener("input", () => {
+    currentAssignmentTitle = assignmentTitleInput.value;
+  });
+}
+
 async function hydrate() {
   try {
     const state = await fetch("/state").then((res) => res.json());
     updateStatus(state.status || "Idle");
     Object.entries(state.files || {}).forEach(([category, items]) => {
       refreshFileList(category, items);
+    });
+    const appdataEntries = state.appdataFiles || {};
+    Object.entries(appdataEntries).forEach(([category, info = {}]) => {
+      const files = Array.isArray(info.files) ? info.files : [];
+      const exists = typeof info.exists === "boolean" ? info.exists : false;
+      const emptyMessage = exists
+        ? "No stored files found."
+        : "Folder not found.";
+      refreshFileList(category, files, {
+        selector: `.file-list[data-appdata-category="${category}"]`,
+        emptyMessage,
+      });
     });
     if (typeof state.maxConcurrent === "number") {
       concurrencySlider.value = state.maxConcurrent;
@@ -197,6 +235,10 @@ async function hydrate() {
     if (typeof state.gradingNotes === "string" && gradingNotesInput) {
       gradingNotesInput.value = state.gradingNotes;
     }
+    if (typeof state.assignmentTitle === "string" && assignmentTitleInput) {
+      assignmentTitleInput.value = state.assignmentTitle;
+      currentAssignmentTitle = state.assignmentTitle;
+    }
   } catch (error) {
     console.error("Failed to load initial state", error);
   }
@@ -206,4 +248,5 @@ document.querySelectorAll(".panel").forEach((panel) => initializePanel(panel));
 initializeConcurrency();
 initializeNitpickiness();
 initializeGradingNotes();
+initializeAssignmentTitle();
 hydrate();

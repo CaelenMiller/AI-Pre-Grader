@@ -8,6 +8,8 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 APPDATA_DIR = BASE_DIR / "appdata"
 
+APPDATA_DIR.mkdir(parents=True, exist_ok=True)
+
 CATEGORY_TITLES: Dict[str, str] = {
     "solutions": "solutions",
     "problems": "problems",
@@ -37,6 +39,7 @@ def index():
         status=status_message,
         files=uploaded_files,
         appdata_files=appdata_files,
+        assignments=_list_assignments(),
         max_concurrent=max_concurrent,
         nitpickiness=nitpickiness_level,
         grading_notes=grading_notes,
@@ -83,6 +86,18 @@ def _gather_appdata_files() -> Dict[str, Dict[str, object]]:
     return data
 
 
+def _list_assignments() -> List[str]:
+    if not APPDATA_DIR.exists():
+        return []
+    assignments = [
+        item.name
+        for item in APPDATA_DIR.iterdir()
+        if item.is_dir()
+    ]
+    assignments.sort(key=lambda name: name.lower())
+    return assignments
+
+
 @app.route("/state")
 def get_state():
     return jsonify(
@@ -90,6 +105,7 @@ def get_state():
             "status": status_message,
             "files": uploaded_files,
             "appdataFiles": _gather_appdata_files(),
+            "assignments": _list_assignments(),
             "maxConcurrent": max_concurrent,
             "nitpickiness": nitpickiness_level,
             "gradingNotes": grading_notes,
@@ -139,7 +155,13 @@ def upload(category: str):
         return jsonify({"message": "No valid files uploaded."}), 400
 
     uploaded_files[category] = stored
-    return jsonify({"message": "Files uploaded successfully.", "files": stored})
+    return jsonify(
+        {
+            "message": "Files uploaded successfully.",
+            "files": stored,
+            "assignmentTitle": assignment_title,
+        }
+    )
 
 
 @app.route("/clear/<category>", methods=["POST"])

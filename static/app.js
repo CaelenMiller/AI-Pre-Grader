@@ -4,9 +4,34 @@ const concurrencyValue = document.getElementById("concurrency-value");
 const nitpickinessSlider = document.getElementById("nitpickiness");
 const nitpickinessValue = document.getElementById("nitpickiness-value");
 const gradingNotesInput = document.getElementById("grading-notes");
+const assignmentSelect = document.getElementById("assignment-selector");
+const newAssignmentGroup = document.getElementById("new-assignment-group");
 const assignmentTitleInput = document.getElementById("assignment-title");
+const NEW_ASSIGNMENT_VALUE = "__new__";
 let notesDebounceHandle;
-let currentAssignmentTitle = assignmentTitleInput?.value || "";
+let pendingNewAssignmentTitle = assignmentTitleInput?.value || "";
+let currentAssignmentTitle = "";
+
+function toggleNewAssignmentInput(show) {
+  if (!newAssignmentGroup) return;
+  newAssignmentGroup.hidden = !show;
+}
+
+if (assignmentSelect) {
+  if (assignmentSelect.value === NEW_ASSIGNMENT_VALUE) {
+    toggleNewAssignmentInput(true);
+    currentAssignmentTitle = (assignmentTitleInput?.value || "").trim();
+  } else if (assignmentSelect.value) {
+    toggleNewAssignmentInput(false);
+    currentAssignmentTitle = assignmentSelect.value;
+  } else {
+    toggleNewAssignmentInput(false);
+    currentAssignmentTitle = "";
+  }
+} else {
+  toggleNewAssignmentInput(Boolean(assignmentTitleInput?.value));
+  currentAssignmentTitle = (assignmentTitleInput?.value || "").trim();
+}
 
 async function updateStatus(message) {
   if (!statusEl) return;
@@ -71,6 +96,10 @@ function initializeDropArea(panel) {
     if (!fileList || !fileList.length) {
       return;
     }
+    if (!currentAssignmentTitle) {
+      alert("Select or create an assignment before uploading files.");
+      return;
+    }
     const formData = new FormData();
     if (assignmentTitleInput) {
       formData.append("assignmentTitle", currentAssignmentTitle);
@@ -80,8 +109,7 @@ function initializeDropArea(panel) {
     try {
       const result = await postFormData(`/upload/${category}`, formData);
       refreshFileList(category, result.files);
-      if (typeof result.assignmentTitle === "string" && assignmentTitleInput) {
-        assignmentTitleInput.value = result.assignmentTitle;
+      if (typeof result.assignmentTitle === "string") {
         currentAssignmentTitle = result.assignmentTitle;
       }
       await hydrate();
@@ -211,12 +239,107 @@ function initializeGradingNotes() {
   });
 }
 
-function initializeAssignmentTitle() {
-  if (!assignmentTitleInput) return;
+function updateAssignmentOptions(assignments = [], selectedTitle = "") {
+  if (!assignmentSelect) return;
 
-  assignmentTitleInput.addEventListener("input", () => {
-    currentAssignmentTitle = assignmentTitleInput.value;
+  const normalizedAssignments = Array.isArray(assignments)
+    ? assignments
+    : [];
+  const previousValue = assignmentSelect.value;
+  const previousPending = pendingNewAssignmentTitle;
+
+  assignmentSelect.innerHTML = "";
+
+  const placeholderOption = document.createElement("option");
+  placeholderOption.value = "";
+  placeholderOption.disabled = true;
+  placeholderOption.textContent = "Select an assignment";
+  assignmentSelect.appendChild(placeholderOption);
+
+  normalizedAssignments.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    assignmentSelect.appendChild(option);
   });
+
+  const createOption = document.createElement("option");
+  createOption.value = NEW_ASSIGNMENT_VALUE;
+  createOption.textContent = "Create new assignment…";
+  assignmentSelect.appendChild(createOption);
+
+  let valueToSelect = "";
+
+  if (selectedTitle && normalizedAssignments.includes(selectedTitle)) {
+    valueToSelect = selectedTitle;
+  } else if (selectedTitle) {
+    valueToSelect = NEW_ASSIGNMENT_VALUE;
+    pendingNewAssignmentTitle = selectedTitle;
+  } else if (previousValue && normalizedAssignments.includes(previousValue)) {
+    valueToSelect = previousValue;
+  } else if (previousValue === NEW_ASSIGNMENT_VALUE) {
+    valueToSelect = NEW_ASSIGNMENT_VALUE;
+    pendingNewAssignmentTitle = previousPending;
+  }
+
+  if (valueToSelect) {
+    assignmentSelect.value = valueToSelect;
+  } else {
+    assignmentSelect.value = "";
+    placeholderOption.selected = true;
+  }
+
+  if (assignmentSelect.value === NEW_ASSIGNMENT_VALUE) {
+    toggleNewAssignmentInput(true);
+    if (assignmentTitleInput) {
+      assignmentTitleInput.value = pendingNewAssignmentTitle;
+    }
+    currentAssignmentTitle = (assignmentTitleInput?.value || "").trim();
+  } else if (assignmentSelect.value) {
+    toggleNewAssignmentInput(false);
+    currentAssignmentTitle = assignmentSelect.value;
+    if (assignmentTitleInput) {
+      assignmentTitleInput.value = "";
+      pendingNewAssignmentTitle = "";
+    }
+  } else {
+    toggleNewAssignmentInput(false);
+    currentAssignmentTitle = "";
+  }
+
+  if (assignmentTitleInput && assignmentSelect.value === NEW_ASSIGNMENT_VALUE) {
+    pendingNewAssignmentTitle = assignmentTitleInput.value;
+  }
+}
+
+function initializeAssignmentControls() {
+  if (assignmentSelect) {
+    assignmentSelect.addEventListener("change", () => {
+      if (assignmentSelect.value === NEW_ASSIGNMENT_VALUE) {
+        toggleNewAssignmentInput(true);
+        if (assignmentTitleInput) {
+          assignmentTitleInput.value = pendingNewAssignmentTitle;
+          assignmentTitleInput.focus();
+        }
+        currentAssignmentTitle = (assignmentTitleInput?.value || "").trim();
+      } else if (assignmentSelect.value) {
+        toggleNewAssignmentInput(false);
+        currentAssignmentTitle = assignmentSelect.value;
+      } else {
+        toggleNewAssignmentInput(false);
+        currentAssignmentTitle = "";
+      }
+    });
+  }
+
+  if (assignmentTitleInput) {
+    assignmentTitleInput.addEventListener("input", () => {
+      pendingNewAssignmentTitle = assignmentTitleInput.value;
+      if (assignmentSelect?.value === NEW_ASSIGNMENT_VALUE) {
+        currentAssignmentTitle = assignmentTitleInput.value.trim();
+      }
+    });
+  }
 }
 
 async function hydrate() {
@@ -249,10 +372,7 @@ async function hydrate() {
     if (typeof state.gradingNotes === "string" && gradingNotesInput) {
       gradingNotesInput.value = state.gradingNotes;
     }
-    if (typeof state.assignmentTitle === "string" && assignmentTitleInput) {
-      assignmentTitleInput.value = state.assignmentTitle;
-      currentAssignmentTitle = state.assignmentTitle;
-    }
+    updateAssignmentOptions(state.assignments || [], state.assignmentTitle || "");
   } catch (error) {
     console.error("Failed to load initial state", error);
   }
@@ -262,5 +382,5 @@ document.querySelectorAll(".panel").forEach((panel) => initializePanel(panel));
 initializeConcurrency();
 initializeNitpickiness();
 initializeGradingNotes();
-initializeAssignmentTitle();
+initializeAssignmentControls();
 hydrate();

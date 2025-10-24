@@ -1,12 +1,13 @@
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from flask import Flask, jsonify, render_template, request
 from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
+APPDATA_DIR = BASE_DIR / "appdata"
 
 app = Flask(__name__)
 
@@ -34,10 +35,12 @@ def index():
     )
 
 
-def _ensure_category(category: str) -> Path:
+def _ensure_category(category: str, base_dir: Optional[Path] = None) -> Path:
     if category not in uploaded_files:
         raise ValueError(f"Unsupported category: {category}")
-    path = UPLOAD_DIR / category
+    root = base_dir if base_dir is not None else UPLOAD_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / category
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -57,12 +60,25 @@ def get_state():
 
 @app.route("/upload/<category>", methods=["POST"])
 def upload(category: str):
-    target_dir = _ensure_category(category)
+    if category not in uploaded_files:
+        return jsonify({"message": f"Unsupported category: {category}."}), 404
+
+    title = (request.form.get("title", "") or "").strip()
+    if not title:
+        return jsonify({"message": "A title is required."}), 400
+
+    safe_title = secure_filename(title)
+    if not safe_title:
+        return jsonify({"message": "Title must include letters or numbers after removing unsafe characters."}), 400
+
     uploaded_files[category].clear()
 
     files = request.files.getlist("files")
     if not files:
         return jsonify({"message": "No files uploaded."}), 400
+
+    submission_root = APPDATA_DIR / safe_title
+    target_dir = _ensure_category(category, submission_root)
 
     stored = []
     for file_storage in files:

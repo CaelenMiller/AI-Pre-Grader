@@ -8,6 +8,12 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 APPDATA_DIR = BASE_DIR / "appdata"
 
+CATEGORY_TITLES: Dict[str, str] = {
+    "solutions": "solutions",
+    "problems": "problems",
+    "submissions": "submissions",
+}
+
 app = Flask(__name__)
 
 # Application state
@@ -43,15 +49,27 @@ def _ensure_category(category: str, base_dir: Optional[Path] = None) -> Path:
         raise ValueError(f"Unsupported category: {category}")
     root = base_dir if base_dir is not None else UPLOAD_DIR
     root.mkdir(parents=True, exist_ok=True)
-    path = root / category
+    if base_dir is not None:
+        folder_name = CATEGORY_TITLES.get(category, category)
+    else:
+        folder_name = category
+    path = root / folder_name
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _gather_appdata_files() -> Dict[str, Dict[str, object]]:
     data: Dict[str, Dict[str, object]] = {}
-    for category, title in CATEGORY_TITLES.items():
-        folder = APPDATA_DIR / title
+
+    if not assignment_title:
+        for category in CATEGORY_TITLES:
+            data[category] = {"files": [], "exists": False}
+        return data
+
+    assignment_root = APPDATA_DIR / assignment_title
+
+    for category, folder_name in CATEGORY_TITLES.items():
+        folder = assignment_root / folder_name
         exists = folder.is_dir()
         if exists:
             files = [
@@ -82,10 +100,14 @@ def get_state():
 
 @app.route("/upload/<category>", methods=["POST"])
 def upload(category: str):
+    global assignment_title
     if category not in uploaded_files:
         return jsonify({"message": f"Unsupported category: {category}."}), 404
 
-    title = (request.form.get("title", "") or "").strip()
+    raw_title = request.form.get("assignmentTitle")
+    if raw_title is None:
+        raw_title = request.form.get("title", "")
+    title = (raw_title or "").strip()
     if not title:
         return jsonify({"message": "A title is required."}), 400
 
@@ -93,13 +115,15 @@ def upload(category: str):
     if not safe_title:
         return jsonify({"message": "Title must include letters or numbers after removing unsafe characters."}), 400
 
+    assignment_title = safe_title
+
     uploaded_files[category].clear()
 
     files = request.files.getlist("files")
     if not files:
         return jsonify({"message": "No files uploaded."}), 400
 
-    submission_root = APPDATA_DIR / safe_title
+    submission_root = APPDATA_DIR / assignment_title
     target_dir = _ensure_category(category, submission_root)
 
     stored = []

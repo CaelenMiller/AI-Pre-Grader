@@ -40,6 +40,37 @@
         <div class="status" id="status">Status: {{ status }}</div>
       </section>
 
+      {% set assignment_list = assignments or [] %}
+      {% set has_assignments = assignment_list|length > 0 %}
+      {% set new_mode = (assignment_title and assignment_title not in assignment_list) or (not has_assignments and not assignment_title) %}
+      <section class="assignment-controls">
+        <h2 class="assignment-controls__title">Assignments</h2>
+        <div class="assignment-controls__form">
+          <div class="form-group">
+            <label for="assignment-selector">Assignment</label>
+            <select id="assignment-selector" name="assignmentSelector">
+              <option value="" disabled {% if not new_mode and not assignment_title %}selected{% endif %}>
+                Select an assignment
+              </option>
+              {% for name in assignment_list %}
+              <option value="{{ name }}" {% if name == assignment_title %}selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+              <option value="__new__" {% if new_mode %}selected{% endif %}>Create new assignment…</option>
+            </select>
+          </div>
+          <div class="form-group" id="new-assignment-group" {% if not new_mode %}hidden{% endif %}>
+            <label for="assignment-title">New Assignment Title</label>
+            <input
+              type="text"
+              id="assignment-title"
+              name="assignmentTitle"
+              placeholder="Enter assignment title"
+              value="{% if new_mode %}{{ assignment_title }}{% endif %}"
+            />
+          </div>
+        </div>
+      </section>
+
       <section class="notes">
         <label for="grading-notes">Grading Notes</label>
         <textarea
@@ -118,31 +149,6 @@
           <p class="panel-description">
             Drop a single PDF or a folder of PDFs, or use the upload button.
           </p>
-          {% set assignment_list = assignments or [] %}
-          {% set has_assignments = assignment_list|length > 0 %}
-          {% set new_mode = (assignment_title and assignment_title not in assignment_list) or (not has_assignments and not assignment_title) %}
-          <div class="form-group">
-            <label for="assignment-selector">Assignment</label>
-            <select id="assignment-selector" name="assignmentSelector">
-              <option value="" disabled {% if not new_mode and not assignment_title %}selected{% endif %}>
-                Select an assignment
-              </option>
-              {% for name in assignment_list %}
-              <option value="{{ name }}" {% if name == assignment_title %}selected{% endif %}>{{ name }}</option>
-              {% endfor %}
-              <option value="__new__" {% if new_mode %}selected{% endif %}>Create new assignment…</option>
-            </select>
-          </div>
-          <div class="form-group" id="new-assignment-group" {% if not new_mode %}hidden{% endif %}>
-            <label for="assignment-title">New Assignment Title</label>
-            <input
-              type="text"
-              id="assignment-title"
-              name="assignmentTitle"
-              placeholder="Enter assignment title"
-              value="{% if new_mode %}{{ assignment_title }}{% endif %}"
-            />
-          </div>
           <div class="drop-area" data-category="submissions">
             <p>Drop PDF or folder here</p>
             <input type="file" accept="application/pdf" webkitdirectory directory multiple />

@@ -120,14 +120,23 @@ function initializePanel(panel) {
     const action = button.dataset.action;
     const category = panel.dataset.category;
 
-    if (action === "clear") {
+    if (action === "wipe") {
       button.addEventListener("click", async () => {
+        const confirmWipe = window.confirm(
+          `Are you sure you want to wipe the ${category} folder?`
+        );
+        if (!confirmWipe) {
+          return;
+        }
+
         try {
+          await updateStatus("Wiping folder...");
           await postJSON(`/clear/${category}`, {});
           refreshFileList(category, []);
-          await updateStatus("Idle");
+          await updateStatus("Folder wiped");
         } catch (error) {
           alert(error.message);
+          await updateStatus("Failed to wipe folder");
         }
       });
     }

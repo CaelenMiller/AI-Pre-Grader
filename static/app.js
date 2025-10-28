@@ -7,6 +7,9 @@ const gradingNotesInput = document.getElementById("grading-notes");
 const assignmentSelect = document.getElementById("assignment-selector");
 const newAssignmentGroup = document.getElementById("new-assignment-group");
 const assignmentTitleInput = document.getElementById("assignment-title");
+const solutionContainsProblemCheckbox = document.getElementById(
+  "solution-contains-problem"
+);
 const NEW_ASSIGNMENT_VALUE = "__new__";
 let notesDebounceHandle;
 let pendingNewAssignmentTitle = assignmentTitleInput?.value || "";
@@ -94,9 +97,9 @@ function formatDuration(milliseconds) {
   return `${minutes}m ${leftoverSeconds}s`;
 }
 
-function getSubmissionNames() {
+function getCategoryFileNames(category) {
   const list = document.querySelector(
-    ".file-list[data-files-category='submissions']"
+    `.file-list[data-files-category='${category}']`
   );
   if (!list) {
     return [];
@@ -105,6 +108,10 @@ function getSubmissionNames() {
     .filter((item) => !item.classList.contains("empty"))
     .map((item) => (item.textContent || "").trim())
     .filter(Boolean);
+}
+
+function getSubmissionNames() {
+  return getCategoryFileNames("submissions");
 }
 
 function sanitizeReportSegment(value) {
@@ -667,8 +674,35 @@ function initializePanel(panel) {
           return;
         }
 
-        const assignmentTitle = resolveCurrentTitle();
+        const missingRequirements = [];
+        const solutionFiles = getCategoryFileNames("solutions");
+        if (solutionFiles.length === 0) {
+          missingRequirements.push("solution PDF");
+        }
+
+        const requiresProblem = !solutionContainsProblemCheckbox?.checked;
+        if (requiresProblem) {
+          const problemFiles = getCategoryFileNames("problems");
+          if (problemFiles.length === 0) {
+            missingRequirements.push("problem PDF");
+          }
+        }
+
         const submissions = getSubmissionNames();
+        if (submissions.length === 0) {
+          missingRequirements.push("at least one submission PDF");
+        }
+
+        if (missingRequirements.length > 0) {
+          const list = missingRequirements.map((item) => `• ${item}`).join("\n");
+          window.alert(
+            `Cannot start grading yet. Please add:\n${list}`
+          );
+          await updateStatus("Missing required files for grading.");
+          return;
+        }
+
+        const assignmentTitle = resolveCurrentTitle();
         const sliderValue = Number(concurrencySlider?.value);
         const selectedMaxConcurrent =
           Number.isFinite(sliderValue) && sliderValue > 0

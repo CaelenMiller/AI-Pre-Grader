@@ -236,7 +236,7 @@ function sanitizeReportSegment(value) {
 
 function buildReportPath(title) {
   const safeSegment = sanitizeReportSegment(title);
-  return `appdata/${safeSegment}/submissions/grading-report.json`;
+  return `appdata/${safeSegment}/outputs/summary.csv`;
 }
 
 function openGradingModal() {

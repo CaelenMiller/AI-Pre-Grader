@@ -1,3 +1,4 @@
+import csv
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -15,6 +16,10 @@ CATEGORY_TITLES: Dict[str, str] = {
     "problems": "problems",
     "submissions": "submissions",
 }
+
+OUTPUTS_KEY = "outputs"
+APPDATA_SECTIONS: Dict[str, str] = {**CATEGORY_TITLES, OUTPUTS_KEY: OUTPUTS_KEY}
+OUTPUT_STATES: List[str] = ["done", "review", "problem"]
 
 app = Flask(__name__)
 
@@ -66,21 +71,29 @@ def _gather_appdata_files() -> Dict[str, Dict[str, object]]:
     data: Dict[str, Dict[str, object]] = {}
 
     if not assignment_title:
-        for category in CATEGORY_TITLES:
+        for category in APPDATA_SECTIONS:
             data[category] = {"files": [], "exists": False}
         return data
 
     assignment_root = APPDATA_DIR / assignment_title
 
-    for category, folder_name in CATEGORY_TITLES.items():
+    for category, folder_name in APPDATA_SECTIONS.items():
         folder = assignment_root / folder_name
         exists = folder.is_dir()
         if exists:
-            files = [
-                item.name
-                for item in sorted(folder.iterdir(), key=lambda p: p.name.lower())
-                if item.is_file()
-            ]
+            if category == OUTPUTS_KEY:
+                files = []
+                for item in folder.rglob("*"):
+                    if item.is_file():
+                        relative = item.relative_to(folder)
+                        files.append(relative.as_posix())
+                files.sort(key=lambda name: name.lower())
+            else:
+                files = [
+                    item.name
+                    for item in sorted(folder.iterdir(), key=lambda p: p.name.lower())
+                    if item.is_file()
+                ]
         else:
             files = []
         data[category] = {"files": files, "exists": exists}
@@ -93,7 +106,7 @@ def _build_authoritative_file_state(
     source = appdata if appdata is not None else _gather_appdata_files()
     authoritative: Dict[str, Dict[str, object]] = {}
 
-    for category in CATEGORY_TITLES:
+    for category in APPDATA_SECTIONS:
         info = source.get(category, {})
         files = info.get("files") if isinstance(info, dict) else []
         if not isinstance(files, list):
@@ -268,8 +281,65 @@ def action_generate_solution():
 @app.route("/action/grade-submission", methods=["POST"])
 def action_grade_submission():
     global status_message
-    status_message = "Grading submission"
-    return jsonify({"status": status_message})
+    if not assignment_title:
+        status_message = "No assignment selected"
+        return jsonify({"message": "No assignment selected."}), 400
+
+    assignment_root = APPDATA_DIR / assignment_title
+    submissions_dir = assignment_root / CATEGORY_TITLES["submissions"]
+
+    submissions = []
+    if submissions_dir.is_dir():
+        submissions = [
+            item
+            for item in submissions_dir.iterdir()
+            if item.is_file()
+        ]
+        submissions.sort(key=lambda path: path.name.lower())
+
+    outputs_dir = assignment_root / OUTPUTS_KEY
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+
+    state_directories = {}
+    for state in OUTPUT_STATES:
+        state_path = outputs_dir / state
+        state_path.mkdir(parents=True, exist_ok=True)
+        state_directories[state] = state_path
+
+    review_dir = state_directories.get("review", outputs_dir)
+    for existing_note in review_dir.glob("*.txt"):
+        if existing_note.is_file():
+            existing_note.unlink()
+
+    summary_rows: List[List[str]] = []
+    default_state = "review"
+    for index, submission in enumerate(submissions, start=1):
+        submission_id = f"{index:03d}"
+        submission_name = submission.name
+        summary_rows.append([submission_name, submission_id, default_state])
+
+        note_path = state_directories[default_state] / f"{submission_id}.txt"
+        note_content = (
+            f"Submission: {submission_name}\n"
+            "\n"
+            "Detailed grading notes are pending."
+        )
+        note_path.write_text(note_content + "\n", encoding="utf-8")
+
+    summary_path = outputs_dir / "summary.csv"
+    with summary_path.open("w", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["submission_name", "id", "state"])
+        writer.writerows(summary_rows)
+
+    status_message = "Grading summary generated"
+    return jsonify(
+        {
+            "status": status_message,
+            "summaryPath": f"appdata/{assignment_title}/{OUTPUTS_KEY}/summary.csv",
+            "totalSubmissions": len(summary_rows),
+        }
+    )
 
 
 @app.route("/settings/concurrency", methods=["POST"])

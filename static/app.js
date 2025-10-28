@@ -45,12 +45,121 @@ const gradingModalElements = gradingModal
       issuesCount: gradingModal.querySelector(
         "[data-role='count-issues']"
       ),
+      chipRunning: gradingModal.querySelector("[data-role='chip-running']"),
+      chipCompleted: gradingModal.querySelector("[data-role='chip-complete']"),
+      chipFlagged: gradingModal.querySelector("[data-role='chip-flagged']"),
+      chipIssues: gradingModal.querySelector("[data-role='chip-issues']"),
       timeline: gradingModal.querySelector("[data-role='timeline']"),
       closeButton: gradingModal.querySelector("[data-role='close-modal']"),
       reportMessage: gradingModal.querySelector("[data-role='report-message']"),
       reportPath: gradingModal.querySelector("[data-role='report-path']"),
     }
   : null;
+
+const timelineFilterState = {
+  activeKey: null,
+  map: {},
+};
+
+function applyTimelineFilter() {
+  if (!gradingModalElements?.timeline) {
+    return;
+  }
+
+  const activeEntry =
+    timelineFilterState.activeKey &&
+    timelineFilterState.map[timelineFilterState.activeKey]
+      ? timelineFilterState.map[timelineFilterState.activeKey]
+      : null;
+
+  const statuses = Array.isArray(activeEntry?.statuses)
+    ? activeEntry.statuses
+    : null;
+
+  const rows = gradingModalElements.timeline.querySelectorAll(
+    ".timeline-row"
+  );
+  rows.forEach((row) => {
+    const matches =
+      !statuses ||
+      statuses.some((statusClass) => row.classList.contains(statusClass));
+    row.classList.toggle("is-hidden-by-filter", !matches);
+  });
+
+  Object.entries(timelineFilterState.map).forEach(([key, entry]) => {
+    const { element } = entry;
+    if (!element) {
+      return;
+    }
+    const isActive = timelineFilterState.activeKey === key;
+    element.classList.toggle("is-active", isActive);
+    element.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
+function clearTimelineFilter() {
+  timelineFilterState.activeKey = null;
+  applyTimelineFilter();
+}
+
+function toggleTimelineFilter(key) {
+  if (!key || !timelineFilterState.map[key]) {
+    timelineFilterState.activeKey = null;
+  } else if (timelineFilterState.activeKey === key) {
+    timelineFilterState.activeKey = null;
+  } else {
+    timelineFilterState.activeKey = key;
+  }
+  applyTimelineFilter();
+}
+
+function setupSummaryChipInteractions() {
+  if (!gradingModalElements) {
+    return;
+  }
+
+  timelineFilterState.map = {
+    running: {
+      element: gradingModalElements.chipRunning,
+      statuses: ["status-running"],
+    },
+    completed: {
+      element: gradingModalElements.chipCompleted,
+      statuses: ["status-complete"],
+    },
+    flagged: {
+      element: gradingModalElements.chipFlagged,
+      statuses: ["status-flagged"],
+    },
+    issues: {
+      element: gradingModalElements.chipIssues,
+      statuses: ["status-error"],
+    },
+  };
+
+  Object.entries(timelineFilterState.map).forEach(([key, entry]) => {
+    const { element } = entry;
+    if (!element) {
+      return;
+    }
+    element.setAttribute("role", "button");
+    element.setAttribute("tabindex", "0");
+    element.setAttribute("aria-pressed", "false");
+    element.addEventListener("click", () => toggleTimelineFilter(key));
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggleTimelineFilter(key);
+      }
+    });
+  });
+
+  applyTimelineFilter();
+}
+
+if (gradingModalElements) {
+  setupSummaryChipInteractions();
+}
 
 let activeGradingSessionPromise = null;
 const FALLBACK_SUBMISSION_COUNT = 6;
@@ -151,7 +260,12 @@ function closeGradingModal(force = false) {
   document.body.classList.remove("modal-open");
 }
 
-function updateSummaryChips({ running = 0, completed = 0, flagged = 0, issues = 0 }) {
+function updateSummaryChips({
+  running = 0,
+  completed = 0,
+  flagged = 0,
+  failed = 0,
+}) {
   if (!gradingModalElements) {
     return;
   }
@@ -165,7 +279,7 @@ function updateSummaryChips({ running = 0, completed = 0, flagged = 0, issues = 
     gradingModalElements.flaggedCount.textContent = String(flagged);
   }
   if (gradingModalElements.issuesCount) {
-    gradingModalElements.issuesCount.textContent = String(issues);
+    gradingModalElements.issuesCount.textContent = String(failed);
   }
 }
 
@@ -271,7 +385,8 @@ function prepareGradingModal(assignmentTitle, submissions = []) {
     gradingModalElements.reportPath.textContent = "";
   }
   updateProgressWheel(total, 0);
-  updateSummaryChips({ running: 0, completed: 0, flagged: 0, issues: 0 });
+  updateSummaryChips({ running: 0, completed: 0, flagged: 0, failed: 0 });
+  clearTimelineFilter();
 
   const items = names.map((name, index) => {
     const item = createTimelineRow(name, index + 1);
@@ -355,7 +470,7 @@ function runSimulatedGradingSession({
       running: state.running,
       completed: state.success,
       flagged: state.flagged,
-      issues: getIssuesCount(),
+      failed: state.failed,
     });
     updateProgressWheel(state.total, getFinishedCount());
   };
@@ -418,6 +533,7 @@ function runSimulatedGradingSession({
     }, 500);
     refreshDisplays();
     item.row.scrollIntoView({ behavior: "smooth", block: "end" });
+    applyTimelineFilter();
   };
 
   const completeItem = (item, result) => {
@@ -463,6 +579,7 @@ function runSimulatedGradingSession({
     const finished = getFinishedCount();
     refreshDisplays();
     item.row.scrollIntoView({ behavior: "smooth", block: "end" });
+    applyTimelineFilter();
     return finished;
   };
 

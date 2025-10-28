@@ -654,12 +654,10 @@ function initializePanel(panel) {
 
     if (action === "generate") {
       button.addEventListener("click", async () => {
-        try {
-          const result = await postJSON("/action/generate-solution", {});
-          await updateStatus(result.status);
-        } catch (error) {
-          alert(error.message);
-        }
+        alert(
+          "Solution generation is not yet implemented. Please add your solution in the designated folder."
+        );
+        await updateStatus("Solution generation not implemented.");
       });
     }
 

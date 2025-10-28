@@ -7,6 +7,9 @@ const gradingNotesInput = document.getElementById("grading-notes");
 const assignmentSelect = document.getElementById("assignment-selector");
 const newAssignmentGroup = document.getElementById("new-assignment-group");
 const assignmentTitleInput = document.getElementById("assignment-title");
+const solutionContainsProblemCheckbox = document.getElementById(
+  "solution-contains-problem"
+);
 const NEW_ASSIGNMENT_VALUE = "__new__";
 let notesDebounceHandle;
 let pendingNewAssignmentTitle = assignmentTitleInput?.value || "";
@@ -94,9 +97,9 @@ function formatDuration(milliseconds) {
   return `${minutes}m ${leftoverSeconds}s`;
 }
 
-function getSubmissionNames() {
+function getCategoryFileNames(category) {
   const list = document.querySelector(
-    ".file-list[data-files-category='submissions']"
+    `.file-list[data-files-category='${category}']`
   );
   if (!list) {
     return [];
@@ -105,6 +108,10 @@ function getSubmissionNames() {
     .filter((item) => !item.classList.contains("empty"))
     .map((item) => (item.textContent || "").trim())
     .filter(Boolean);
+}
+
+function getSubmissionNames() {
+  return getCategoryFileNames("submissions");
 }
 
 function sanitizeReportSegment(value) {
@@ -413,7 +420,7 @@ function runSimulatedGradingSession({
     item.row.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
-  const completeItem = (item, outcome) => {
+  const completeItem = (item, result) => {
     if (item.timer) {
       window.clearInterval(item.timer);
       item.timer = null;
@@ -430,21 +437,27 @@ function runSimulatedGradingSession({
       "status-error"
     );
 
+    const outcome = result?.outcome || "error";
+    const logMessage = result?.logMessage;
+
     if (outcome === "success") {
       state.success += 1;
       item.row.classList.add("status-complete");
       item.statusEl.textContent = "Completed";
-      item.logEl.textContent = "Automatic feedback delivered.";
+      item.logEl.textContent =
+        logMessage || "Automatic feedback delivered.";
     } else if (outcome === "flagged") {
       state.flagged += 1;
       item.row.classList.add("status-flagged");
       item.statusEl.textContent = "Needs review";
-      item.logEl.textContent = "Manual follow-up recommended.";
+      item.logEl.textContent =
+        logMessage || "Manual follow-up recommended.";
     } else {
       state.failed += 1;
       item.row.classList.add("status-error");
-      item.statusEl.textContent = "Failed";
-      item.logEl.textContent = "Processing error encountered.";
+      item.statusEl.textContent = "Problem";
+      item.logEl.textContent =
+        logMessage || "Processing error encountered.";
     }
 
     const finished = getFinishedCount();
@@ -453,11 +466,37 @@ function runSimulatedGradingSession({
     return finished;
   };
 
-  const rollOutcome = () => {
-    const roll = Math.random();
-    if (roll < 0.65) return "success";
-    if (roll < 0.88) return "flagged";
-    return "error";
+  const determineSimulatedResult = (fileName) => {
+    const normalized = (fileName || "").toLowerCase();
+    const extensionMatch = /\.([^.]+)$/.exec(fileName || "");
+    const originalExtension = extensionMatch?.[1] || "";
+    const extensionLabel = originalExtension
+      ? originalExtension.toLowerCase()
+      : "";
+
+    if (normalized.endsWith(".pdf")) {
+      return {
+        outcome: "success",
+        logMessage: "PDF submission processed successfully.",
+        delay: 1200 + Math.random() * 2200,
+      };
+    }
+
+    if (normalized.endsWith(".ipynb")) {
+      return {
+        outcome: "flagged",
+        logMessage: "Notebook (.ipynb) requires manual review.",
+        delay: 900 + Math.random() * 1500,
+      };
+    }
+
+    return {
+      outcome: "error",
+      logMessage: extensionLabel
+        ? `Unsupported file type detected (.${extensionLabel}).`
+        : "Unsupported file type detected.",
+      delay: 700 + Math.random() * 1200,
+    };
   };
 
   let nextIndex = 0;
@@ -473,9 +512,10 @@ function runSimulatedGradingSession({
       const current = state.items[nextIndex];
       nextIndex += 1;
       startItem(current);
-      const duration = 1200 + Math.random() * 2200;
+      const result = determineSimulatedResult(current.name);
+      const duration = Math.max(400, Number(result?.delay) || 1200);
       window.setTimeout(() => {
-        const finished = completeItem(current, rollOutcome());
+        const finished = completeItem(current, result);
         if (finished >= state.total) {
           finishSession();
         } else {
@@ -667,8 +707,35 @@ function initializePanel(panel) {
           return;
         }
 
-        const assignmentTitle = resolveCurrentTitle();
+        const missingRequirements = [];
+        const solutionFiles = getCategoryFileNames("solutions");
+        if (solutionFiles.length === 0) {
+          missingRequirements.push("solution PDF");
+        }
+
+        const requiresProblem = !solutionContainsProblemCheckbox?.checked;
+        if (requiresProblem) {
+          const problemFiles = getCategoryFileNames("problems");
+          if (problemFiles.length === 0) {
+            missingRequirements.push("problem PDF");
+          }
+        }
+
         const submissions = getSubmissionNames();
+        if (submissions.length === 0) {
+          missingRequirements.push("at least one submission file");
+        }
+
+        if (missingRequirements.length > 0) {
+          const list = missingRequirements.map((item) => `• ${item}`).join("\n");
+          window.alert(
+            `Cannot start grading yet. Please add:\n${list}`
+          );
+          await updateStatus("Missing required files for grading.");
+          return;
+        }
+
+        const assignmentTitle = resolveCurrentTitle();
         const sliderValue = Number(concurrencySlider?.value);
         const selectedMaxConcurrent =
           Number.isFinite(sliderValue) && sliderValue > 0

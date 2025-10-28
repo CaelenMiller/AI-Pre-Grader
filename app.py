@@ -1,4 +1,5 @@
 import csv
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -38,8 +39,17 @@ class SubmissionOutcome:
 def _normalize_state(state: Optional[str]) -> str:
     if state is None:
         return "review"
+
     normalized = state.strip().lower()
-    return normalized if normalized in OUTPUT_STATES else "review"
+    if normalized in OUTPUT_STATES:
+        return normalized
+
+    tokens = [token for token in re.split(r"[^a-z]+", normalized) if token]
+    for token in tokens:
+        if token in OUTPUT_STATES:
+            return token
+
+    return "review"
 
 
 def _run_grading_pipeline(submission_paths: List[Path]) -> List[SubmissionOutcome]:

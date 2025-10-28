@@ -65,3 +65,26 @@ def test_pdf_routed_to_problem_state(tmp_path, isolated_appdata, monkeypatch):
     assert "student-work.pdf" in note_body
     assert "OCR failed" in note_body
 
+
+def test_normalizes_fuzzy_done_state(tmp_path, isolated_appdata, monkeypatch):
+    assignment_root = isolated_appdata / app.assignment_title
+    submissions_dir = assignment_root / app.CATEGORY_TITLES["submissions"]
+    submissions_dir.mkdir(parents=True, exist_ok=True)
+
+    pdf_path = submissions_dir / "student-work.pdf"
+    pdf_path.write_text("State: Done ✅\nAll tests passed", encoding="utf-8")
+
+    with app.app.test_client() as client:
+        response = client.post("/action/grade-submission")
+
+    assert response.status_code == 200
+
+    summary_path = assignment_root / app.OUTPUTS_KEY / "summary.csv"
+    with summary_path.open(newline="", encoding="utf-8") as csvfile:
+        rows = list(csv.reader(csvfile))
+
+    assert rows[1] == ["student-work.pdf", "001", "done"]
+
+    done_note = assignment_root / app.OUTPUTS_KEY / "done" / "001.txt"
+    assert done_note.exists()
+

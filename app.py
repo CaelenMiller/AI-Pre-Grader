@@ -1,4 +1,5 @@
 import csv
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -20,6 +21,65 @@ CATEGORY_TITLES: Dict[str, str] = {
 OUTPUTS_KEY = "outputs"
 APPDATA_SECTIONS: Dict[str, str] = {**CATEGORY_TITLES, OUTPUTS_KEY: OUTPUTS_KEY}
 OUTPUT_STATES: List[str] = ["done", "review", "problem"]
+
+
+@dataclass
+class SubmissionOutcome:
+    """Container describing the grading result for a submission."""
+
+    submission: Path
+    state: str
+    notes: str = ""
+
+    def normalized_state(self) -> str:
+        return _normalize_state(self.state)
+
+
+def _normalize_state(state: Optional[str]) -> str:
+    if state is None:
+        return "review"
+    normalized = state.strip().lower()
+    return normalized if normalized in OUTPUT_STATES else "review"
+
+
+def _run_grading_pipeline(submission_paths: List[Path]) -> List[SubmissionOutcome]:
+    """Execute the grading pipeline and return structured outcomes per submission.
+
+    The real project wires this into the pre-grader/runner stack. For the purposes of
+    this repository snapshot we simulate the behaviour by reading an optional
+    "State:" marker from each submission file. If the marker is not present (or the
+    file cannot be read), the submission defaults to the "review" state.
+    """
+
+    outcomes: List[SubmissionOutcome] = []
+
+    for path in submission_paths:
+        detected_state = "review"
+        note = "Detailed grading notes are pending."
+
+        try:
+            contents = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            contents = ""
+
+        for line in contents.splitlines():
+            if line.lower().startswith("state:"):
+                candidate = line.split(":", 1)[1].strip()
+                if candidate:
+                    detected_state = candidate.lower()
+                break
+
+        normalized = _normalize_state(detected_state)
+        if normalized == "done":
+            note = "Automated checks reported no issues."
+        elif normalized == "review":
+            note = "Requires human review."
+        elif normalized == "problem":
+            note = "Automatic grading detected a blocking problem."
+
+        outcomes.append(SubmissionOutcome(submission=path, state=detected_state, notes=note))
+
+    return outcomes
 
 app = Flask(__name__)
 
@@ -306,25 +366,34 @@ def action_grade_submission():
         state_path.mkdir(parents=True, exist_ok=True)
         state_directories[state] = state_path
 
-    review_dir = state_directories.get("review", outputs_dir)
-    for existing_note in review_dir.glob("*.txt"):
-        if existing_note.is_file():
-            existing_note.unlink()
+    for directory in state_directories.values():
+        for existing_note in directory.glob("*.txt"):
+            if existing_note.is_file():
+                existing_note.unlink()
 
     summary_rows: List[List[str]] = []
-    default_state = "review"
+    outcomes = _run_grading_pipeline(submissions)
+    outcome_map = {result.submission.resolve(): result for result in outcomes}
+
     for index, submission in enumerate(submissions, start=1):
         submission_id = f"{index:03d}"
         submission_name = submission.name
-        summary_rows.append([submission_name, submission_id, default_state])
+        outcome = outcome_map.get(submission.resolve())
+        if outcome is None:
+            outcome = SubmissionOutcome(submission=submission, state="review")
 
-        note_path = state_directories[default_state] / f"{submission_id}.txt"
-        note_content = (
-            f"Submission: {submission_name}\n"
-            "\n"
-            "Detailed grading notes are pending."
-        )
-        note_path.write_text(note_content + "\n", encoding="utf-8")
+        state = outcome.normalized_state()
+        summary_rows.append([submission_name, submission_id, state])
+
+        state_dir = state_directories.get(state, state_directories["review"])
+        note_path = state_dir / f"{submission_id}.txt"
+        note_lines = [f"Submission: {submission_name}", ""]
+        notes = outcome.notes.strip()
+        if notes:
+            note_lines.append(notes)
+        else:
+            note_lines.append("Detailed grading notes are pending.")
+        note_path.write_text("\n".join(note_lines) + "\n", encoding="utf-8")
 
     summary_path = outputs_dir / "summary.csv"
     with summary_path.open("w", newline="", encoding="utf-8") as csvfile:

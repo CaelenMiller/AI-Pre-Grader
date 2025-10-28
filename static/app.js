@@ -12,6 +12,7 @@ let notesDebounceHandle;
 let pendingNewAssignmentTitle = assignmentTitleInput?.value || "";
 let currentAssignmentTitle = "";
 let lastAssignmentSelectValue = assignmentSelect?.value || "";
+let hydratedMaxConcurrent = Number(concurrencySlider?.value) || 1;
 
 const gradingModal = document.getElementById("grading-modal");
 const gradingModalElements = gradingModal
@@ -285,10 +286,16 @@ function prepareGradingModal(assignmentTitle, submissions = []) {
   };
 }
 
-function runSimulatedGradingSession({ assignmentTitle, submissions = [] }) {
+function runSimulatedGradingSession({
+  assignmentTitle,
+  submissions = [],
+  maxConcurrent = 1,
+}) {
   if (activeGradingSessionPromise) {
     return activeGradingSessionPromise;
   }
+
+  const safeMaxConcurrent = Math.max(1, Number(maxConcurrent) || 1);
 
   if (!gradingModal || !gradingModalElements) {
     return new Promise((resolve) => {
@@ -334,15 +341,26 @@ function runSimulatedGradingSession({ assignmentTitle, submissions = [] }) {
     resolveSession = resolve;
   });
 
-  const finishSession = () => {
-    const finished = state.success + state.flagged + state.failed;
+  const getFinishedCount = () => state.success + state.flagged + state.failed;
+  const getIssuesCount = () => state.flagged + state.failed;
+  const refreshDisplays = () => {
     updateSummaryChips({
       running: state.running,
       completed: state.success,
       flagged: state.flagged,
-      issues: state.flagged + state.failed,
+      issues: getIssuesCount(),
     });
-    updateProgressWheel(state.total, finished);
+    updateProgressWheel(state.total, getFinishedCount());
+  };
+
+  let sessionFinished = false;
+
+  const finishSession = () => {
+    if (sessionFinished) {
+      return;
+    }
+    sessionFinished = true;
+    refreshDisplays();
     if (gradingModalElements.reportPath) {
       gradingModalElements.reportPath.textContent = buildReportPath(
         assignmentTitle
@@ -356,7 +374,7 @@ function runSimulatedGradingSession({ assignmentTitle, submissions = [] }) {
       gradingModalElements.closeButton.disabled = false;
       gradingModalElements.closeButton.focus();
     }
-    const issuesCount = state.flagged + state.failed;
+    const issuesCount = getIssuesCount();
     const pluralSuffix = issuesCount === 1 ? "" : "s";
     const summaryMessage =
       issuesCount > 0
@@ -391,12 +409,7 @@ function runSimulatedGradingSession({ assignmentTitle, submissions = [] }) {
         Date.now() - item.startTime
       );
     }, 500);
-    updateSummaryChips({
-      running: state.running,
-      completed: state.success,
-      flagged: state.flagged,
-      issues: state.flagged + state.failed,
-    });
+    refreshDisplays();
     item.row.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
@@ -434,15 +447,10 @@ function runSimulatedGradingSession({ assignmentTitle, submissions = [] }) {
       item.logEl.textContent = "Processing error encountered.";
     }
 
-    const finished = state.success + state.flagged + state.failed;
-    updateSummaryChips({
-      running: state.running,
-      completed: state.success,
-      flagged: state.flagged,
-      issues: state.flagged + state.failed,
-    });
-    updateProgressWheel(state.total, finished);
+    const finished = getFinishedCount();
+    refreshDisplays();
     item.row.scrollIntoView({ behavior: "smooth", block: "end" });
+    return finished;
   };
 
   const rollOutcome = () => {
@@ -452,24 +460,36 @@ function runSimulatedGradingSession({ assignmentTitle, submissions = [] }) {
     return "error";
   };
 
-  let index = 0;
+  let nextIndex = 0;
 
-  const processNext = () => {
-    if (index >= state.items.length) {
-      finishSession();
+  const launchNext = () => {
+    if (sessionFinished) {
       return;
     }
-    const current = state.items[index];
-    startItem(current);
-    const duration = 1200 + Math.random() * 2200;
-    window.setTimeout(() => {
-      completeItem(current, rollOutcome());
-      index += 1;
-      window.setTimeout(processNext, 400);
-    }, duration);
+    while (
+      state.running < safeMaxConcurrent &&
+      nextIndex < state.items.length
+    ) {
+      const current = state.items[nextIndex];
+      nextIndex += 1;
+      startItem(current);
+      const duration = 1200 + Math.random() * 2200;
+      window.setTimeout(() => {
+        const finished = completeItem(current, rollOutcome());
+        if (finished >= state.total) {
+          finishSession();
+        } else {
+          launchNext();
+        }
+      }, duration);
+    }
   };
 
-  window.setTimeout(processNext, 350);
+  if (state.total === 0) {
+    finishSession();
+  } else {
+    window.setTimeout(launchNext, 350);
+  }
 
   return activeGradingSessionPromise;
 }
@@ -651,6 +671,11 @@ function initializePanel(panel) {
 
         const assignmentTitle = resolveCurrentTitle();
         const submissions = getSubmissionNames();
+        const sliderValue = Number(concurrencySlider?.value);
+        const selectedMaxConcurrent =
+          Number.isFinite(sliderValue) && sliderValue > 0
+            ? sliderValue
+            : Math.max(1, hydratedMaxConcurrent || 1);
 
         button.disabled = true;
 
@@ -664,6 +689,7 @@ function initializePanel(panel) {
           const summary = await runSimulatedGradingSession({
             assignmentTitle,
             submissions,
+            maxConcurrent: selectedMaxConcurrent,
           });
           await updateStatus(summary?.message || "Grading completed.");
         } catch (error) {
@@ -680,13 +706,32 @@ function initializePanel(panel) {
 
 function initializeConcurrency() {
   concurrencySlider?.addEventListener("input", () => {
-    concurrencyValue.textContent = concurrencySlider.value;
+    if (concurrencyValue) {
+      concurrencyValue.textContent = concurrencySlider.value;
+    }
+    const rawValue = Number(concurrencySlider.value);
+    if (Number.isFinite(rawValue) && rawValue > 0) {
+      hydratedMaxConcurrent = rawValue;
+    }
   });
 
   concurrencySlider?.addEventListener("change", async () => {
-    const value = Number(concurrencySlider.value);
+    const rawValue = Number(concurrencySlider.value);
+    const safeValue = Math.max(
+      1,
+      Number.isFinite(rawValue) && rawValue > 0
+        ? rawValue
+        : Math.max(1, hydratedMaxConcurrent || 1)
+    );
+    if (!Number.isFinite(rawValue) || rawValue < 1) {
+      concurrencySlider.value = String(safeValue);
+      if (concurrencyValue) {
+        concurrencyValue.textContent = String(safeValue);
+      }
+    }
+    hydratedMaxConcurrent = safeValue;
     try {
-      await postJSON("/settings/concurrency", { maxConcurrent: value });
+      await postJSON("/settings/concurrency", { maxConcurrent: safeValue });
     } catch (error) {
       alert(error.message);
     }
@@ -809,8 +854,14 @@ function applyState(state = {}) {
     refreshFileList(category, files, { emptyMessage });
   });
   if (typeof state.maxConcurrent === "number") {
-    concurrencySlider.value = state.maxConcurrent;
-    concurrencyValue.textContent = state.maxConcurrent;
+    const safeMax = Math.max(1, Number(state.maxConcurrent) || 1);
+    hydratedMaxConcurrent = safeMax;
+    if (concurrencySlider) {
+      concurrencySlider.value = String(safeMax);
+    }
+    if (concurrencyValue) {
+      concurrencyValue.textContent = String(safeMax);
+    }
   }
   if (typeof state.nitpickiness === "number" && nitpickinessSlider) {
     nitpickinessSlider.value = state.nitpickiness;

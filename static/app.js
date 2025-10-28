@@ -13,6 +13,44 @@ let pendingNewAssignmentTitle = assignmentTitleInput?.value || "";
 let currentAssignmentTitle = "";
 let lastAssignmentSelectValue = assignmentSelect?.value || "";
 
+const gradingModal = document.getElementById("grading-modal");
+const gradingModalElements = gradingModal
+  ? {
+      backdrop: gradingModal.querySelector(".grading-modal__backdrop"),
+      assignmentLabel: gradingModal.querySelector(
+        "[data-role='assignment-label']"
+      ),
+      progressWheel: gradingModal.querySelector(
+        "[data-role='progress-wheel']"
+      ),
+      progressCount: gradingModal.querySelector(
+        "[data-role='progress-count']"
+      ),
+      progressTotal: gradingModal.querySelector(
+        "[data-role='progress-total']"
+      ),
+      runningCount: gradingModal.querySelector(
+        "[data-role='count-running']"
+      ),
+      completedCount: gradingModal.querySelector(
+        "[data-role='count-completed']"
+      ),
+      flaggedCount: gradingModal.querySelector(
+        "[data-role='count-flagged']"
+      ),
+      issuesCount: gradingModal.querySelector(
+        "[data-role='count-issues']"
+      ),
+      timeline: gradingModal.querySelector("[data-role='timeline']"),
+      closeButton: gradingModal.querySelector("[data-role='close-modal']"),
+      reportMessage: gradingModal.querySelector("[data-role='report-message']"),
+      reportPath: gradingModal.querySelector("[data-role='report-path']"),
+    }
+  : null;
+
+let activeGradingSessionPromise = null;
+const FALLBACK_SUBMISSION_COUNT = 6;
+
 function toggleNewAssignmentInput(show) {
   if (!newAssignmentGroup) return;
   newAssignmentGroup.hidden = !show;
@@ -42,6 +80,423 @@ function resolveCurrentTitle() {
   }
   return currentAssignmentTitle;
 }
+
+function formatDuration(milliseconds) {
+  const totalTenths = Math.max(0, Math.round(milliseconds / 100));
+  const seconds = Math.floor(totalTenths / 10);
+  const tenths = totalTenths % 10;
+  if (seconds < 60) {
+    return tenths === 0 ? `${seconds}s` : `${seconds}.${tenths}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const leftoverSeconds = seconds % 60;
+  return `${minutes}m ${leftoverSeconds}s`;
+}
+
+function getSubmissionNames() {
+  const list = document.querySelector(
+    ".file-list[data-files-category='submissions']"
+  );
+  if (!list) {
+    return [];
+  }
+  return Array.from(list.children)
+    .filter((item) => !item.classList.contains("empty"))
+    .map((item) => (item.textContent || "").trim())
+    .filter(Boolean);
+}
+
+function sanitizeReportSegment(value) {
+  const normalized = (value || "").trim();
+  if (!normalized) {
+    return "current_assignment";
+  }
+  return normalized
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80) || "current_assignment";
+}
+
+function buildReportPath(title) {
+  const safeSegment = sanitizeReportSegment(title);
+  return `appdata/${safeSegment}/submissions/grading-report.json`;
+}
+
+function openGradingModal() {
+  if (!gradingModal) {
+    return;
+  }
+  gradingModal.classList.add("is-open");
+  gradingModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeGradingModal(force = false) {
+  if (!gradingModal) {
+    return;
+  }
+  if (!force && gradingModalElements?.closeButton?.disabled) {
+    return;
+  }
+  gradingModal.classList.remove("is-open");
+  gradingModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+
+function updateSummaryChips({ running = 0, completed = 0, flagged = 0, issues = 0 }) {
+  if (!gradingModalElements) {
+    return;
+  }
+  if (gradingModalElements.runningCount) {
+    gradingModalElements.runningCount.textContent = String(running);
+  }
+  if (gradingModalElements.completedCount) {
+    gradingModalElements.completedCount.textContent = String(completed);
+  }
+  if (gradingModalElements.flaggedCount) {
+    gradingModalElements.flaggedCount.textContent = String(flagged);
+  }
+  if (gradingModalElements.issuesCount) {
+    gradingModalElements.issuesCount.textContent = String(issues);
+  }
+}
+
+function updateProgressWheel(total, finished) {
+  if (!gradingModalElements) {
+    return;
+  }
+  const safeTotal = Math.max(0, Number(total) || 0);
+  const safeFinished = Math.max(0, Math.min(Number(finished) || 0, safeTotal));
+  if (gradingModalElements.progressTotal) {
+    gradingModalElements.progressTotal.textContent = String(safeTotal);
+  }
+  if (gradingModalElements.progressCount) {
+    gradingModalElements.progressCount.textContent = String(safeFinished);
+  }
+  if (gradingModalElements.progressWheel) {
+    const progress = safeTotal === 0 ? 0 : Math.min(1, safeFinished / safeTotal);
+    gradingModalElements.progressWheel.style.setProperty(
+      "--progress",
+      `${Math.round(progress * 360)}deg`
+    );
+  }
+}
+
+function createTimelineRow(name, index) {
+  const row = document.createElement("article");
+  row.className = "timeline-row status-queued";
+
+  const badge = document.createElement("div");
+  badge.className = "timeline-row__badge";
+  badge.textContent = String(index);
+
+  const body = document.createElement("div");
+  body.className = "timeline-row__body";
+
+  const header = document.createElement("div");
+  header.className = "timeline-row__header";
+
+  const title = document.createElement("span");
+  title.className = "timeline-row__title";
+  title.textContent = name;
+
+  const status = document.createElement("span");
+  status.className = "timeline-row__status";
+  status.textContent = "Queued";
+
+  header.append(title, status);
+
+  const meta = document.createElement("div");
+  meta.className = "timeline-row__meta";
+
+  const elapsed = document.createElement("span");
+  elapsed.className = "timeline-row__elapsed";
+  elapsed.textContent = "0s";
+
+  meta.append(elapsed);
+
+  const log = document.createElement("p");
+  log.className = "timeline-row__log";
+  log.textContent = "Waiting to start…";
+
+  body.append(header, meta, log);
+  row.append(badge, body);
+
+  return {
+    name,
+    row,
+    statusEl: status,
+    logEl: log,
+    elapsedEl: elapsed,
+    timer: null,
+    startTime: null,
+  };
+}
+
+function prepareGradingModal(assignmentTitle, submissions = []) {
+  if (!gradingModal || !gradingModalElements) {
+    return null;
+  }
+  const names = submissions.length
+    ? submissions
+    : Array.from({ length: FALLBACK_SUBMISSION_COUNT }, (_, index) =>
+        `Submission ${index + 1}`
+      );
+  const total = names.length;
+
+  gradingModal.classList.remove("is-finished");
+  const timelineEl = gradingModalElements.timeline;
+  if (timelineEl) {
+    timelineEl.innerHTML = "";
+  }
+  const assignmentLabel = assignmentTitle
+    ? `Assignment: ${assignmentTitle}`
+    : "Assignment: not yet saved";
+  const submissionLabel = `${total} submission${total === 1 ? "" : "s"}`;
+  if (gradingModalElements.assignmentLabel) {
+    gradingModalElements.assignmentLabel.textContent = `${assignmentLabel} • ${submissionLabel}`;
+  }
+  if (gradingModalElements.reportMessage) {
+    gradingModalElements.reportMessage.hidden = true;
+  }
+  if (gradingModalElements.reportPath) {
+    gradingModalElements.reportPath.textContent = "";
+  }
+  updateProgressWheel(total, 0);
+  updateSummaryChips({ running: 0, completed: 0, flagged: 0, issues: 0 });
+
+  const items = names.map((name, index) => {
+    const item = createTimelineRow(name, index + 1);
+    timelineEl?.appendChild(item.row);
+    return item;
+  });
+
+  if (timelineEl) {
+    timelineEl.scrollTop = 0;
+  }
+  if (gradingModalElements.closeButton) {
+    gradingModalElements.closeButton.disabled = true;
+  }
+
+  return {
+    total,
+    items,
+    names,
+  };
+}
+
+function runSimulatedGradingSession({ assignmentTitle, submissions = [] }) {
+  if (activeGradingSessionPromise) {
+    return activeGradingSessionPromise;
+  }
+
+  if (!gradingModal || !gradingModalElements) {
+    return new Promise((resolve) => {
+      const duration = 1200 + Math.random() * 1800;
+      window.setTimeout(() => {
+        resolve({
+          total: submissions.length,
+          completed: submissions.length,
+          flagged: 0,
+          failed: 0,
+          hasIssues: false,
+          message: "Grading completed (simulation).",
+        });
+      }, duration);
+    });
+  }
+
+  const prepared = prepareGradingModal(assignmentTitle, submissions);
+  if (!prepared) {
+    return Promise.resolve({
+      total: 0,
+      completed: 0,
+      flagged: 0,
+      failed: 0,
+      hasIssues: false,
+      message: "No submissions queued.",
+    });
+  }
+
+  openGradingModal();
+
+  const state = {
+    total: prepared.total,
+    items: prepared.items,
+    running: 0,
+    success: 0,
+    flagged: 0,
+    failed: 0,
+  };
+
+  let resolveSession;
+  activeGradingSessionPromise = new Promise((resolve) => {
+    resolveSession = resolve;
+  });
+
+  const finishSession = () => {
+    const finished = state.success + state.flagged + state.failed;
+    updateSummaryChips({
+      running: state.running,
+      completed: state.success,
+      flagged: state.flagged,
+      issues: state.flagged + state.failed,
+    });
+    updateProgressWheel(state.total, finished);
+    if (gradingModalElements.reportPath) {
+      gradingModalElements.reportPath.textContent = buildReportPath(
+        assignmentTitle
+      );
+    }
+    if (gradingModalElements.reportMessage) {
+      gradingModalElements.reportMessage.hidden = false;
+    }
+    gradingModal.classList.add("is-finished");
+    if (gradingModalElements.closeButton) {
+      gradingModalElements.closeButton.disabled = false;
+      gradingModalElements.closeButton.focus();
+    }
+    const issuesCount = state.flagged + state.failed;
+    const pluralSuffix = issuesCount === 1 ? "" : "s";
+    const summaryMessage =
+      issuesCount > 0
+        ? `Grading completed with ${issuesCount} submission${pluralSuffix} needing attention.`
+        : "Grading completed successfully.";
+    resolveSession({
+      total: state.total,
+      completed: state.success,
+      flagged: state.flagged,
+      failed: state.failed,
+      hasIssues: issuesCount > 0,
+      message: summaryMessage,
+    });
+    activeGradingSessionPromise = null;
+  };
+
+  const startItem = (item) => {
+    state.running += 1;
+    item.row.classList.remove(
+      "status-queued",
+      "status-complete",
+      "status-flagged",
+      "status-error"
+    );
+    item.row.classList.add("status-running");
+    item.statusEl.textContent = "Running";
+    item.logEl.textContent = "Evaluating submission…";
+    item.startTime = Date.now();
+    item.elapsedEl.textContent = "0s";
+    item.timer = window.setInterval(() => {
+      item.elapsedEl.textContent = formatDuration(
+        Date.now() - item.startTime
+      );
+    }, 500);
+    updateSummaryChips({
+      running: state.running,
+      completed: state.success,
+      flagged: state.flagged,
+      issues: state.flagged + state.failed,
+    });
+    item.row.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
+
+  const completeItem = (item, outcome) => {
+    if (item.timer) {
+      window.clearInterval(item.timer);
+      item.timer = null;
+    }
+    state.running = Math.max(0, state.running - 1);
+    const elapsed = Date.now() - (item.startTime || Date.now());
+    item.elapsedEl.textContent = formatDuration(elapsed);
+
+    item.row.classList.remove(
+      "status-running",
+      "status-queued",
+      "status-complete",
+      "status-flagged",
+      "status-error"
+    );
+
+    if (outcome === "success") {
+      state.success += 1;
+      item.row.classList.add("status-complete");
+      item.statusEl.textContent = "Completed";
+      item.logEl.textContent = "Automatic feedback delivered.";
+    } else if (outcome === "flagged") {
+      state.flagged += 1;
+      item.row.classList.add("status-flagged");
+      item.statusEl.textContent = "Needs review";
+      item.logEl.textContent = "Manual follow-up recommended.";
+    } else {
+      state.failed += 1;
+      item.row.classList.add("status-error");
+      item.statusEl.textContent = "Failed";
+      item.logEl.textContent = "Processing error encountered.";
+    }
+
+    const finished = state.success + state.flagged + state.failed;
+    updateSummaryChips({
+      running: state.running,
+      completed: state.success,
+      flagged: state.flagged,
+      issues: state.flagged + state.failed,
+    });
+    updateProgressWheel(state.total, finished);
+    item.row.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
+
+  const rollOutcome = () => {
+    const roll = Math.random();
+    if (roll < 0.65) return "success";
+    if (roll < 0.88) return "flagged";
+    return "error";
+  };
+
+  let index = 0;
+
+  const processNext = () => {
+    if (index >= state.items.length) {
+      finishSession();
+      return;
+    }
+    const current = state.items[index];
+    startItem(current);
+    const duration = 1200 + Math.random() * 2200;
+    window.setTimeout(() => {
+      completeItem(current, rollOutcome());
+      index += 1;
+      window.setTimeout(processNext, 400);
+    }, duration);
+  };
+
+  window.setTimeout(processNext, 350);
+
+  return activeGradingSessionPromise;
+}
+
+if (gradingModalElements?.closeButton) {
+  gradingModalElements.closeButton.addEventListener("click", () =>
+    closeGradingModal(true)
+  );
+}
+
+if (gradingModalElements?.backdrop) {
+  gradingModalElements.backdrop.addEventListener("click", () => {
+    if (!gradingModalElements.closeButton?.disabled) {
+      closeGradingModal(true);
+    }
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (
+    event.key === "Escape" &&
+    gradingModal?.classList?.contains("is-open") &&
+    !gradingModalElements?.closeButton?.disabled
+  ) {
+    closeGradingModal(true);
+  }
+});
 
 async function updateStatus(message) {
   if (!statusEl) return;
@@ -190,11 +645,33 @@ function initializePanel(panel) {
 
     if (action === "grade") {
       button.addEventListener("click", async () => {
+        if (button.disabled) {
+          return;
+        }
+
+        const assignmentTitle = resolveCurrentTitle();
+        const submissions = getSubmissionNames();
+
+        button.disabled = true;
+
         try {
-          const result = await postJSON("/action/grade-submission", {});
-          await updateStatus(result.status);
+          await updateStatus("Grading submissions…");
+          try {
+            await postJSON("/action/grade-submission", {});
+          } catch (error) {
+            console.warn("Failed to sync grading status", error);
+          }
+          const summary = await runSimulatedGradingSession({
+            assignmentTitle,
+            submissions,
+          });
+          await updateStatus(summary?.message || "Grading completed.");
         } catch (error) {
-          alert(error.message);
+          console.error(error);
+          alert(error.message || "Failed to simulate grading.");
+          await updateStatus("Grading interrupted.");
+        } finally {
+          button.disabled = false;
         }
       });
     }

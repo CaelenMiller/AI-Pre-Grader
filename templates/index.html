@@ -180,6 +180,70 @@
       </section>
     </main>
 
+    <div class="grading-modal" id="grading-modal" aria-hidden="true">
+      <div class="grading-modal__backdrop"></div>
+      <div
+        class="grading-modal__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="grading-modal-title"
+      >
+        <header class="grading-modal__header">
+          <div class="grading-modal__heading">
+            <h2 id="grading-modal-title">Grading submissions</h2>
+            <p
+              class="grading-modal__subtitle"
+              data-role="assignment-label"
+            >
+              Tracking live progress…
+            </p>
+          </div>
+          <div class="grading-progress">
+            <div
+              class="grading-progress__wheel"
+              data-role="progress-wheel"
+              aria-hidden="true"
+            ></div>
+            <div class="grading-progress__label">
+              <span data-role="progress-count">0</span>/<span
+                data-role="progress-total"
+                >0</span
+              >
+            </div>
+          </div>
+        </header>
+        <section class="grading-modal__summary" aria-live="polite">
+          <div class="summary-chip" data-role="chip-running">
+            Running <span data-role="count-running">0</span>
+          </div>
+          <div class="summary-chip" data-role="chip-complete">
+            Completed <span data-role="count-completed">0</span>
+          </div>
+          <div class="summary-chip" data-role="chip-flagged">
+            Needs review <span data-role="count-flagged">0</span>
+          </div>
+          <div class="summary-chip" data-role="chip-issues">
+            Problems <span data-role="count-issues">0</span>
+          </div>
+        </section>
+        <section
+          class="grading-modal__timeline"
+          data-role="timeline"
+          aria-live="polite"
+        ></section>
+        <footer class="grading-modal__footer">
+          <div class="grading-modal__report" data-role="report-message" hidden>
+            <p>
+              Report saved to <code data-role="report-path"></code>.
+            </p>
+          </div>
+          <button class="button secondary" type="button" data-role="close-modal" disabled>
+            Close
+          </button>
+        </footer>
+      </div>
+    </div>
+
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
   </body>
 </html>
